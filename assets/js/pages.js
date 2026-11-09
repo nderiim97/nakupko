@@ -48,6 +48,13 @@
     setHtml("#new-grid", productGrid(fresh));
     setHtml("#sale-grid", productGrid(sale));
 
+    const custom = NK.getCustomProducts();
+    if (custom.length) {
+      const customSection = $("#custom-section");
+      if (customSection) customSection.hidden = false;
+      setHtml("#custom-grid", productGrid(custom.slice(0, 4)));
+    }
+
     if (recent.length) {
       const section = $("#recent-section");
       if (section) section.hidden = false;
@@ -583,7 +590,7 @@
       '<p class="product-info__brand"><a href="' + NK.categoryUrl(product.category) + '?brand=' + encodeURIComponent(product.brand) + '">' + esc(product.brand) + "</a></p>" +
       "</div>" +
       "<h1>" + esc(product.name) + "</h1>" +
-      '<div class="product-info__rating">' + starsOnly(product.rating) + '<span class="product-info__reviews">' + product.reviews + " ocen</span></div>" +
+      '<div class="product-info__rating">' + starsOnly(product.rating) + '<span class="product-info__reviews">' + (product.reviews ? product.reviews + " ocen" : "Nov izdelek") + "</span></div>" +
       '<div class="product-price">' +
       "<strong>" + NK.money(product.price) + "</strong>" +
       (product.oldPrice ? "<s>" + NK.money(product.oldPrice) + "</s>" : "") +

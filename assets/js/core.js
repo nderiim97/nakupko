@@ -11,7 +11,8 @@
     coupon: "nakupko.coupon.v1",
     recent: "nakupko.recent.v1",
     orders: "nakupko.orders.v1",
-    lastOrder: "nakupko.last-order.v1"
+    lastOrder: "nakupko.last-order.v1",
+    customProducts: "nakupko.custom-products.v1"
   };
 
   const moneyFormatter = new Intl.NumberFormat("sl-SI", {
@@ -81,8 +82,14 @@
     return list;
   }
 
-  const products = Array.isArray(NK.products) ? NK.products : [];
   const categories = Array.isArray(NK.categories) ? NK.categories : [];
+  const baseProducts = Array.isArray(NK.products) ? NK.products : [];
+  const storedCustom = read(KEYS.customProducts, []);
+  const customProducts = (Array.isArray(storedCustom) ? storedCustom : []).filter(isValidCustomProduct);
+  const products = baseProducts.concat(customProducts);
+  NK.baseProducts = baseProducts;
+  NK.customProducts = customProducts;
+  NK.products = products;
   const byId = new Map(products.map((product) => [product.id, product]));
 
   const state = {
@@ -119,6 +126,175 @@
 
   function categoryUrl(slug) {
     return "category.html?cat=" + encodeURIComponent(slug);
+  }
+
+  /* --------------------------------------------------------- custom products */
+  const CATEGORY_PALETTES = {
+    "bela-tehnika": ["#e8f6f1", "#0f766e", "#123c36"],
+    racunalnistvo: ["#e6edff", "#3b5bdb", "#1e2a5a"],
+    "tv-avdio": ["#ffe9e2", "#c2410c", "#5a1f0c"],
+    "mali-aparati": ["#fff1d6", "#b45309", "#4a2a05"],
+    dom: ["#f0e8ff", "#7c3aed", "#3b1d70"],
+    sport: ["#e3f7e8", "#15803d", "#0f3d22"],
+    zdravje: ["#ffe8f0", "#be185d", "#5a0f2c"],
+    igrace: ["#e8f4ff", "#2563eb", "#122a5c"]
+  };
+
+  const CATEGORY_ART = {
+    "bela-tehnika": "washer",
+    racunalnistvo: "laptop",
+    "tv-avdio": "tv",
+    "mali-aparati": "espresso",
+    dom: "lamp",
+    sport: "yoga",
+    zdravje: "diffuser",
+    igrace: "blocks"
+  };
+
+  function isValidCustomProduct(product) {
+    return Boolean(
+      product &&
+        product.id &&
+        product.name &&
+        product.category &&
+        categoryBySlug(product.category) &&
+        Number(product.price) > 0
+    );
+  }
+
+  function slugify(value) {
+    return norm(value)
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 42);
+  }
+
+  function nextCustomId(name) {
+    const base = "custom-" + (slugify(name) || "izdelek");
+    let id = base;
+    let counter = 2;
+    while (byId.has(id)) {
+      id = base + "-" + counter;
+      counter += 1;
+    }
+    return id;
+  }
+
+  function customPalette(slug) {
+    const palette = CATEGORY_PALETTES[slug] || ["#eef4f2", "#0f766e", "#123c36"];
+    return palette.slice();
+  }
+
+  function categoryArt(slug) {
+    return CATEGORY_ART[slug] || "generic";
+  }
+
+  function saveCustomProduct(input) {
+    const data = input || {};
+    const name = String(data.name || "").trim().replace(/\s+/g, " ");
+    const category = String(data.category || "");
+    const categoryInfo = categoryBySlug(category);
+    const price = Math.round((Number(data.price) || 0) * 100) / 100;
+
+    if (!name) return { ok: false, message: "Vnesite naziv izdelka." };
+    if (!categoryInfo) return { ok: false, message: "Izberite veljavno kategorijo." };
+    if (!(price > 0)) return { ok: false, message: "Cena mora biti večja od 0." };
+
+    const brand = String(data.brand || "").trim().replace(/\s+/g, " ") || "Nakupko";
+    const oldPriceValue = Math.round((Number(data.oldPrice) || 0) * 100) / 100;
+    const oldPrice = oldPriceValue > price ? oldPriceValue : null;
+    const art = String(data.art || "").trim() || categoryArt(category);
+    const colorName = String(data.colorName || "").trim();
+    const colorHex = /^#[0-9a-f]{6}$/i.test(String(data.colorHex || "")) ? String(data.colorHex) : "#0f766e";
+    const colors = colorName ? [{ name: colorName, hex: colorHex }] : [];
+    const description = String(data.description || "").trim();
+    const existing = data.id ? NK.customProducts.find((product) => product.id === data.id) : null;
+    const sku = existing && existing.sku ? existing.sku : "NK-C" + String(Date.now()).slice(-6);
+
+    if (existing) {
+      Object.assign(existing, {
+        name: name,
+        brand: brand,
+        category: category,
+        price: price,
+        oldPrice: oldPrice,
+        art: art,
+        palette: customPalette(category),
+        colors: colors,
+        description: description || existing.description,
+        badge: oldPrice ? "Akcija" : "Novo",
+        specs: Object.assign({}, existing.specs, {
+          "Kategorija": categoryInfo.name,
+          "Blagovna znamka": brand,
+          "Šifra izdelka": sku
+        })
+      });
+      write(KEYS.customProducts, NK.customProducts);
+      document.dispatchEvent(new CustomEvent("nk:products-change"));
+      return { ok: true, product: existing, updated: true };
+    }
+
+    const product = {
+      id: nextCustomId(name),
+      name: name,
+      brand: brand,
+      category: category,
+      price: price,
+      oldPrice: oldPrice,
+      rating: 4.5,
+      reviews: 0,
+      art: art,
+      palette: customPalette(category),
+      badge: oldPrice ? "Akcija" : "Novo",
+      colors: colors,
+      description: description || "Nov izdelek v demo ponudbi Nakupko.",
+      features: [],
+      specs: {
+        "Kategorija": categoryInfo.name,
+        "Blagovna znamka": brand,
+        "Šifra izdelka": sku,
+        "Garancija": "2 leti"
+      },
+      stock: true,
+      tags: ["new"],
+      sku: sku,
+      added: Date.now(),
+      custom: true
+    };
+
+    NK.customProducts.push(product);
+    NK.products.push(product);
+    byId.set(product.id, product);
+    write(KEYS.customProducts, NK.customProducts);
+    document.dispatchEvent(new CustomEvent("nk:products-change"));
+    return { ok: true, product: product, created: true };
+  }
+
+  function deleteCustomProduct(id) {
+    const index = NK.customProducts.findIndex((product) => product.id === id);
+    if (index === -1) return false;
+
+    NK.customProducts.splice(index, 1);
+    const catalogIndex = NK.products.findIndex((product) => product.id === id);
+    if (catalogIndex !== -1) NK.products.splice(catalogIndex, 1);
+    byId.delete(id);
+
+    state.cart = state.cart.filter((item) => item.id !== id);
+    state.wishlist = state.wishlist.filter((entry) => entry !== id);
+    state.recent = state.recent.filter((entry) => entry !== id);
+
+    write(KEYS.customProducts, NK.customProducts);
+    write(KEYS.cart, state.cart);
+    write(KEYS.wishlist, state.wishlist);
+    write(KEYS.recent, state.recent);
+    updateBadges();
+    renderCartDrawer();
+    document.dispatchEvent(new CustomEvent("nk:products-change"));
+    return true;
+  }
+
+  function getCustomProducts() {
+    return NK.customProducts.slice().sort((a, b) => (b.added || 0) - (a.added || 0));
   }
 
   function matchesAny(text, list) {
@@ -571,7 +747,7 @@
       "</div>" +
       '<div class="container footer-bottom">' +
       '<p>© 2026 Nakupko d.o.o. Vse pravice pridržane.</p>' +
-      '<p class="footer-demo">Demo trgovina — vsi izdelki, cene in podatki so izmišljeni.</p>' +
+      '<p class="footer-demo">Demo trgovina — vsi izdelki, cene in podatki so izmišljeni. <a href="admin.html">Skrbništvo</a></p>' +
       '<div class="pay-badges" aria-label="Načini plačila">' +
       "<span>Visa</span><span>Mastercard</span><span>Maestro</span><span>Po povzetju</span><span>Bančno nakazilo</span>" +
       "</div></div>" +
@@ -962,6 +1138,11 @@
     categoryBySlug: categoryBySlug,
     productUrl: productUrl,
     categoryUrl: categoryUrl,
+    customPalette: customPalette,
+    categoryArt: categoryArt,
+    saveCustomProduct: saveCustomProduct,
+    deleteCustomProduct: deleteCustomProduct,
+    getCustomProducts: getCustomProducts,
     searchProducts: searchProducts,
     stars: stars,
     productCard: productCard,

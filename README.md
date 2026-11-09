@@ -37,6 +37,7 @@ Nato obiščite <http://127.0.0.1:8765/index.html>.
 | `cart.html` | Košarica, količine, koda za popust in povzetek |
 | `checkout.html` | Demo blagajna z obrazcem in povzetkom naročila |
 | `wishlist.html` | Seznam želja |
+| `admin.html` | Skrbništvo: prijava, dodajanje in urejanje izdelkov |
 | `order.html` | Potrditev naročila |
 | `info.html` | Dostava, vračila, plačilo, pogosta vprašanja, kontakt, pogoji |
 
@@ -46,6 +47,28 @@ Nato obiščite <http://127.0.0.1:8765/index.html>.
 - `DOBRODOSLI` — 5 € popusta.
 
 Kodo vnesite v košarici. Uporabi se takoj in jo lahko kadarkoli odstranite.
+
+## Skrbništvo (dodajanje izdelkov)
+
+Odprite `admin.html` (povezava je tudi v nogi strani) in se prijavite z geslom:
+
+```
+12345678
+```
+
+Po prijavi lahko:
+
+- dodate izdelek v izbrano rubriko in določite ceno (ter neobvezno staro ceno),
+- izberete blagovno znamko, barvo in ilustracijo (predogled se posodablja sproti),
+- urejate in brišete svoje izdelke.
+
+Novi izdelki se takoj prikažejo na domači strani, v izbrani rubriki, iskanju in na
+strani izdelka. Shranjeni so v `localStorage` pod ključem `nakupko.custom-products.v1`,
+zato jih vidi samo ta brskalnik in samo na tej napravi.
+
+> **Varnost:** prijava je zgolj demo. Geslo je zapisano v javni datoteki
+> `assets/js/admin.js`, podatki pa ostanejo v brskalniku. To ni prava zaščita in ni
+> primerno za resnično trgovino.
 
 ## Posebnosti
 
@@ -60,7 +83,7 @@ Kodo vnesite v košarici. Uporabi se takoj in jo lahko kadarkoli odstranite.
 ```
 nakupko/
 ├─ index.html, category.html, search.html, product.html,
-│  cart.html, checkout.html, wishlist.html, order.html, info.html
+│  cart.html, checkout.html, wishlist.html, order.html, info.html, admin.html
 ├─ assets/
 │  ├─ css/style.css        celoten oblikovni sistem in odzivna postavitev
 │  ├─ img/favicon.svg      originalna ikona
@@ -68,7 +91,8 @@ nakupko/
 │     ├─ data.js           kategorije, znamke, izdelki, akcije, kuponi
 │     ├─ art.js            originalne SVG ilustracije in ikone
 │     ├─ core.js           stanje, košarica, seznam želja, iskanje, skupna postavitev
-│     └─ pages.js          krmilniki posameznih strani
+│     ├─ pages.js          krmilniki posameznih strani
+│     └─ admin.js          demo prijava in urejanje lastnih izdelkov
 └─ README.md
 ```
 
