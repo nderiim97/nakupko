@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Iskanje | Nakupko</title>
+  <meta name="description" content="Poiščite izdelke, znamke in kategorije v demo trgovini Nakupko.">
+  <meta name="theme-color" content="#0f766e">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body data-page="search">
+  <a class="skip-link" href="#main">Preskoči na vsebino</a>
+  <div id="site-header"></div>
+
+  <main id="main">
+    <div class="container">
+      <nav class="breadcrumb" aria-label="Drobtinice">
+        <a href="index.html">Domov</a>
+        <span>/</span>
+        <span aria-current="page">Iskanje</span>
+      </nav>
+
+      <header class="catalog-head">
+        <p class="eyebrow">Poiščite svoj izdelek</p>
+        <h1 id="search-title">Kaj iščete?</h1>
+        <p id="search-count">Vnesite izraz za iskanje po izdelkih, znamkah in kategorijah.</p>
+      </header>
+
+      <div class="catalog-main">
+        <form class="header-search" id="search-page-form" role="search" autocomplete="off">
+          <label class="sr-only" for="search-page-input">Iskanje po izdelkih</label>
+          <span class="header-search__icon" aria-hidden="true">
+            <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>
+          </span>
+          <input id="search-page-input" name="q" type="search" placeholder="npr. pralni stroj, Lumen, kava" autocomplete="off">
+          <button class="btn btn--primary header-search__submit" type="submit">Iskanje</button>
+        </form>
+
+        <div class="catalog-toolbar" style="margin-top:16px">
+          <div class="catalog-sort">
+            <label for="search-sort">Razvrsti</label>
+            <select id="search-sort">
+              <option value="relevance">Najbolj ustrezno</option>
+              <option value="price-asc">Cena: najnižja</option>
+              <option value="price-desc">Cena: najvišja</option>
+              <option value="rating">Najbolje ocenjeno</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="product-grid" id="search-results"></div>
+        <div class="empty-state" id="search-empty" hidden></div>
+      </div>
+    </div>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/art.js"></script>
+  <script src="assets/js/core.js"></script>
+  <script src="assets/js/pages.js"></script>
+</body>
+</html>

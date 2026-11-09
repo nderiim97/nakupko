@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vsi izdelki | Nakupko</title>
+  <meta name="description" content="Prebrskajte celotno ponudbo Nakupko: bela tehnika, računalništvo, TV in avdio, mali aparati, dom, šport, zdravje ter igrače.">
+  <meta name="theme-color" content="#0f766e">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body data-page="category">
+  <a class="skip-link" href="#main">Preskoči na vsebino</a>
+  <div id="site-header"></div>
+
+  <main id="main">
+    <div class="container">
+      <nav class="breadcrumb" aria-label="Drobtinice">
+        <a href="index.html">Domov</a>
+        <span>/</span>
+        <span id="catalog-crumb" aria-current="page">Vsi izdelki</span>
+      </nav>
+
+      <header class="catalog-head">
+        <p class="eyebrow">Nakupko izbira</p>
+        <h1 id="catalog-title">Vsi izdelki</h1>
+        <p id="catalog-description">Preverjena izbira za dom, delo in prosti čas. Cene so vključno z DDV.</p>
+      </header>
+
+      <div class="catalog-layout">
+        <aside class="filters" id="filters" aria-label="Filtri izdelkov"></aside>
+
+        <div class="catalog-main">
+          <div class="catalog-toolbar">
+            <button class="btn btn--soft filter-toggle" type="button" data-filter-toggle aria-expanded="false" aria-controls="filters">
+              <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8Z"/></svg>
+              Filtri
+            </button>
+            <p class="catalog-count" id="catalog-count" aria-live="polite"></p>
+            <div class="catalog-sort">
+              <label for="sort">Razvrsti</label>
+              <select id="sort" name="sort">
+                <option value="relevance">Priporočeno</option>
+                <option value="price-asc">Cena: najnižja</option>
+                <option value="price-desc">Cena: najvišja</option>
+                <option value="rating">Najbolje ocenjeno</option>
+                <option value="newest">Najnovejše</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="active-filters" id="active-filters"></div>
+          <div class="product-grid" id="catalog-grid"></div>
+          <div class="empty-state" id="catalog-empty" hidden></div>
+          <div class="catalog-more">
+            <button class="btn btn--soft btn--lg" type="button" id="load-more" hidden>Prikaži več</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/art.js"></script>
+  <script src="assets/js/core.js"></script>
+  <script src="assets/js/pages.js"></script>
+</body>
+</html>

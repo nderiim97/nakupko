@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nakupko — dobro izbrano za dom, delo in prosti čas</title>
+  <meta name="description" content="Nakupko je demo spletna trgovina z izbrano belo tehniko, računalništvom, opremo za dom in prosti čas. Vsi izdelki in podatki so izmišljeni.">
+  <meta name="theme-color" content="#0f766e">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body data-page="home">
+  <a class="skip-link" href="#main">Preskoči na vsebino</a>
+  <div id="site-header"></div>
+
+  <main id="main">
+    <section class="hero-wrap" aria-label="Izbrane ponudbe">
+      <div class="container">
+        <div class="hero" id="hero">
+          <div id="hero-slides"></div>
+          <div class="hero-dots" id="hero-dots"></div>
+          <button class="hero-arrow hero-arrow--prev" type="button" data-hero-prev aria-label="Prejšnja ponudba">
+            <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <button class="hero-arrow hero-arrow--next" type="button" data-hero-next aria-label="Naslednja ponudba">
+            <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--tight">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Kategorije</p>
+            <h2>Kaj iščete danes?</h2>
+            <p>Osem skrbno izbranih skupin izdelkov za vsakdan.</p>
+          </div>
+          <a class="text-link" href="category.html">Vsi izdelki
+            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+        <div class="category-tiles" id="category-tiles"></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Izbrano zate</p>
+            <h2>Priljubljeni izdelki</h2>
+            <p>Najbolje ocenjeno in najbolj iskano v tej sezoni.</p>
+          </div>
+          <a class="text-link" href="category.html?sort=rating">Poglej vse
+            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+        <div id="featured-grid"></div>
+      </div>
+    </section>
+
+    <section class="section section--tight">
+      <div class="container">
+        <div class="promo-grid" id="promo-grid"></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Sveže na policah</p>
+            <h2>Novo v ponudbi</h2>
+            <p>Nedavno dodani izdelki, ki so vredni ogleda.</p>
+          </div>
+          <a class="text-link" href="category.html?new=1">Vse novosti
+            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+        <div id="new-grid"></div>
+      </div>
+    </section>
+
+    <section class="section section--soft">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Jesenska izbira</p>
+            <h2>Trenutne akcije</h2>
+            <p>Znižane cene do konca meseca oziroma do razprodaje zalog.</p>
+          </div>
+          <a class="text-link" href="category.html?sale=1">Vse akcije
+            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+        <div id="sale-grid"></div>
+      </div>
+    </section>
+
+    <section class="section" id="recent-section" hidden>
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Nadaljujte tam, kjer ste ostali</p>
+            <h2>Nedavno ogledano</h2>
+          </div>
+          <a class="text-link" href="category.html">Poglej vse
+            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+        <div id="recent-grid"></div>
+      </div>
+    </section>
+
+    <section class="section section--tight">
+      <div class="container">
+        <ul class="trust-bar">
+          <li>
+            <span class="trust-bar__icon">
+              <svg class="icon" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 4h14v12H1z"/><path d="M15 8h4l3 4v4h-7z"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+            </span>
+            <span><strong>Brezplačna dostava</strong><small>Pri naročilih nad 50 €</small></span>
+          </li>
+          <li>
+            <span class="trust-bar__icon">
+              <svg class="icon" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7"/></svg>
+            </span>
+            <span><strong>30 dni za vračilo</strong><small>Brez pojasnila</small></span>
+          </li>
+          <li>
+            <span class="trust-bar__icon">
+              <svg class="icon" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.4 9.2-8 11-4.6-1.8-8-6-8-11V5Z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>
+            </span>
+            <span><strong>Varno plačilo</strong><small>Kartica ali po povzetju</small></span>
+          </li>
+          <li>
+            <span class="trust-bar__icon">
+              <svg class="icon" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h4l2 5-2.5 1.5a13 13 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2Z"/></svg>
+            </span>
+            <span><strong>Pomoč uporabnikom</strong><small>Pon–pet 8–18, sob 9–13</small></span>
+          </li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/art.js"></script>
+  <script src="assets/js/core.js"></script>
+  <script src="assets/js/pages.js"></script>
+</body>
+</html>
