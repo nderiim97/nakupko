@@ -60,6 +60,11 @@
     checkout: "Začetek blagajne",
     order: "Naročilo"
   };
+  const ORDER_STATUS_LABELS = {
+    new: "Novo",
+    approved: "Odobreno",
+    shipped: "Poslano"
+  };
 
   function isLoggedIn() {
     try {
@@ -202,18 +207,22 @@
 
     root.innerHTML =
       '<div class="admin-top">' +
-      '<p class="admin-note">Pregled obiska, urejanje izdelkov in povezava Stripe plačil. Vsi podatki ostanejo samo v <code>localStorage</code> tega brskalnika.</p>' +
+      '<p class="admin-note">Pregled obiska, naročila strank, urejanje izdelkov in povezava Stripe plačil. Vsi podatki ostanejo samo v <code>localStorage</code> tega brskalnika.</p>' +
       '<div class="admin-top__actions">' +
       '<a class="btn btn--soft" href="index.html">Odpri trgovino</a>' +
       '<button class="btn btn--ghost" type="button" id="admin-logout">Odjava</button>' +
       "</div></div>" +
       '<div class="admin-tabs" role="tablist" aria-label="Skrbniški razdelki">' +
       tabButton("overview", "Pregled", "spark") +
+      tabButton("orders", "Naročila", "truck") +
       tabButton("products", "Izdelki", "cart") +
       tabButton("payments", "Plačila", "lock") +
       "</div>" +
       '<section class="admin-view" data-admin-view="overview">' +
       '<div id="admin-dashboard"></div>' +
+      "</section>" +
+      '<section class="admin-view" data-admin-view="orders" hidden>' +
+      '<div id="admin-orders"></div>' +
       "</section>" +
       '<section class="admin-view" data-admin-view="products" hidden>' +
       '<div class="admin-layout">' +
@@ -270,6 +279,7 @@
 
     renderList();
     renderHidden();
+    renderOrders();
     bindSearch();
     bindForm();
     bindTabs();
@@ -420,6 +430,7 @@
       topPages: topPages,
       countries: countries,
       days: days,
+      pendingOrders: NK.getOrders().filter((order) => orderStatus(order) === "new").length,
       recent: events.slice(-9).reverse()
     };
   }
@@ -582,6 +593,9 @@
       '<div class="admin-dash">' +
       '<div class="dash-head"><div><h2>Pregled obiska</h2><p>Lokalna statistika tega brskalnika. Podatki se ne pošiljajo nikamor.</p></div>' +
       '<div class="dash-actions">' +
+      '<button class="btn btn--soft" type="button" data-dash-orders>Naročila' +
+      (data.pendingOrders ? " (" + data.pendingOrders + ")" : "") +
+      "</button>" +
       '<button class="btn btn--soft" type="button" data-dash-refresh>Osveži</button>' +
       '<button class="btn btn--soft" type="button" data-dash-seed>Demo podatki</button>' +
       '<button class="btn btn--ghost admin-danger" type="button" data-dash-clear>Počisti</button>' +
@@ -709,6 +723,8 @@
     if (!host) return;
     const refresh = host.querySelector("[data-dash-refresh]");
     if (refresh) refresh.addEventListener("click", renderDashboard);
+    const ordersButton = host.querySelector("[data-dash-orders]");
+    if (ordersButton) ordersButton.addEventListener("click", () => setAdminTab("orders"));
     host.querySelectorAll("[data-dash-seed]").forEach((button) => {
       button.addEventListener("click", seedDemoAnalytics);
     });
@@ -721,6 +737,328 @@
         NK.toast("Statistika je počiščena.", "success");
       });
     }
+  }
+
+  /* --------------------------------------------------------------- orders */
+  function orderStatus(order) {
+    const status = order && order.status;
+    return ORDER_STATUS_LABELS[status] ? status : "new";
+  }
+
+  function orderDateText(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const time = date.toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" });
+    return NK.longDate(date) + " · " + time;
+  }
+
+  function detailRow(label, value) {
+    if (!value) return "";
+    return (
+      "<div><dt>" +
+      NK.escapeHtml(label) +
+      "</dt><dd>" +
+      NK.escapeHtml(value) +
+      "</dd></div>"
+    );
+  }
+
+  function orderCardHtml(order) {
+    const status = orderStatus(order);
+    const customer = order.customer || {};
+    const items = Array.isArray(order.items) ? order.items : [];
+    const totals = order.totals || {};
+    const count = items.reduce((sum, item) => sum + (Number(item.qty) || 1), 0);
+    const address = [customer.address, [customer.postal, customer.city].filter(Boolean).join(" ")]
+      .filter(Boolean)
+      .join(", ");
+    const deliveryLabel = order.delivery && order.delivery.label ? order.delivery.label : "Standardna dostava";
+    const paymentLabel = order.payment && order.payment.label ? order.payment.label : "Kartica";
+    const id = NK.escapeHtml(order.id);
+    let actions = "";
+    if (status === "new") {
+      actions =
+        '<button class="btn btn--primary" type="button" data-order-approve="' +
+        id +
+        '">Odobri pošiljko</button>';
+    } else if (status === "approved") {
+      actions =
+        '<button class="btn btn--primary" type="button" data-order-ship="' +
+        id +
+        '">Označi kot poslano</button>' +
+        '<button class="btn btn--ghost" type="button" data-order-reset="' +
+        id +
+        '">Razveljavi</button>';
+    } else {
+      actions =
+        '<span class="order-shipped-note">' +
+        ART.icon("check", 15) +
+        " Pošiljka je poslana</span>" +
+        '<button class="btn btn--ghost" type="button" data-order-reset="' +
+        id +
+        '">Razveljavi</button>';
+    }
+
+    return (
+      '<article class="order-admin">' +
+      '<div class="order-admin__head">' +
+      '<div class="order-admin__title">' +
+      '<p class="order-admin__id">' +
+      NK.escapeHtml(order.id) +
+      (order.demo ? ' <span class="order-demo-tag">demo</span>' : "") +
+      "</p>" +
+      "<h3>" +
+      NK.escapeHtml(customer.name || "Neznana stranka") +
+      "</h3>" +
+      "<p>" +
+      NK.escapeHtml(orderDateText(order.createdAt)) +
+      " · " +
+      count +
+      " " +
+      slPlural(count, ["izdelek", "izdelka", "izdelki", "izdelkov"]) +
+      "</p></div>" +
+      '<span class="order-badge order-badge--' +
+      status +
+      '">' +
+      ORDER_STATUS_LABELS[status] +
+      "</span></div>" +
+      '<div class="order-admin__grid">' +
+      '<section class="order-admin__box">' +
+      '<h4>' +
+      ART.icon("user", 15) +
+      " Podatki stranke</h4>" +
+      '<dl class="order-customer">' +
+      detailRow("Ime in priimek", customer.name) +
+      detailRow("E-pošta", customer.email) +
+      detailRow("Telefon", customer.phone) +
+      detailRow("Naslov", address) +
+      detailRow("Opomba", customer.note) +
+      "</dl></section>" +
+      '<section class="order-admin__box">' +
+      '<h4>' +
+      ART.icon("cart", 15) +
+      " Izdelki</h4>" +
+      '<ul class="order-lines">' +
+      items
+        .map(
+          (item) =>
+            "<li><span><strong>" +
+            NK.escapeHtml(item.name || item.id || "Izdelek") +
+            "</strong><small>" +
+            (Number(item.qty) || 1) +
+            " × " +
+            NK.money(item.price || 0) +
+            (item.color ? " · " + NK.escapeHtml(item.color) : "") +
+            "</small></span><strong>" +
+            NK.money(item.lineTotal || (Number(item.price) || 0) * (Number(item.qty) || 1)) +
+            "</strong></li>"
+        )
+        .join("") +
+      "</ul>" +
+      '<div class="order-admin__totals">' +
+      '<div class="summary-row"><span>Vmesni seštevek</span><strong>' +
+      NK.money(totals.subtotal || 0) +
+      "</strong></div>" +
+      (totals.discount
+        ? '<div class="summary-row summary-row--discount"><span>Popust</span><strong>−' +
+          NK.money(totals.discount) +
+          "</strong></div>"
+        : "") +
+      '<div class="summary-row"><span>Dostava</span><strong>' +
+      (totals.shipping ? NK.money(totals.shipping) : "Brezplačno") +
+      "</strong></div>" +
+      (totals.fee
+        ? '<div class="summary-row"><span>Doplačilo za plačilo</span><strong>' +
+          NK.money(totals.fee) +
+          "</strong></div>"
+        : "") +
+      '<div class="summary-total"><span>Skupaj</span><strong>' +
+      NK.money(totals.total || 0) +
+      "</strong></div></div></section></div>" +
+      '<div class="order-admin__foot">' +
+      '<div class="order-admin__meta"><span>' +
+      ART.icon("truck", 15) +
+      NK.escapeHtml(deliveryLabel) +
+      "</span><span>" +
+      ART.icon("shield", 15) +
+      NK.escapeHtml(paymentLabel) +
+      "</span></div>" +
+      '<div class="order-admin__actions">' +
+      actions +
+      "</div></div></article>"
+    );
+  }
+
+  function orderStat(label, value, status) {
+    return (
+      '<div class="order-stat order-stat--' +
+      status +
+      '"><span>' +
+      NK.escapeHtml(label) +
+      "</span><strong>" +
+      value +
+      "</strong></div>"
+    );
+  }
+
+  function ordersHtml() {
+    const orders = NK.getOrders().slice().reverse();
+    const counts = { new: 0, approved: 0, shipped: 0 };
+    orders.forEach((order) => {
+      counts[orderStatus(order)] += 1;
+    });
+    return (
+      '<div class="admin-orders">' +
+      '<div class="dash-head"><div><h2>Naročila strank</h2><p>Preglejte podatke strank in odobrite pošiljanje izdelkov.</p></div>' +
+      '<div class="dash-actions">' +
+      '<button class="btn btn--soft" type="button" data-order-refresh>Osveži</button>' +
+      '<button class="btn btn--soft" type="button" data-order-demo>Demo naročilo</button>' +
+      "</div></div>" +
+      '<div class="order-stats">' +
+      orderStat("Nova naročila", counts.new, "new") +
+      orderStat("Odobrena", counts.approved, "approved") +
+      orderStat("Poslana", counts.shipped, "shipped") +
+      "</div>" +
+      (orders.length
+        ? '<div class="orders-list">' + orders.map(orderCardHtml).join("") + "</div>"
+        : '<div class="dash-empty">Ni še naročil. Dokončajte nakup v trgovini ali dodajte demo naročilo.</div>') +
+      '<p class="dash-footnote">Naročila so shranjena samo v tem brskalniku pod ključem <code>nakupko.orders.v1</code>. Odobritev pošiljke je demo oznaka; pravo obvestilo stranki bi poslal strežnik.</p>' +
+      "</div>"
+    );
+  }
+
+  function renderOrders() {
+    const host = $("#admin-orders");
+    if (!host) return;
+    host.innerHTML = ordersHtml();
+    bindOrders();
+  }
+
+  function changeOrderStatus(orderId, status) {
+    const result = NK.updateOrderStatus(orderId, status);
+    if (!result.ok) {
+      NK.toast(result.message || "Statusa ni bilo mogoče spremeniti.", "info");
+      return;
+    }
+    renderOrders();
+    const messages = {
+      approved: "Pošiljka je odobrena.",
+      shipped: "Naročilo je označeno kot poslano.",
+      new: "Odobritev je razveljavljena."
+    };
+    NK.toast(messages[status] || "Status je posodobljen.", "success");
+  }
+
+  function addDemoOrder() {
+    const products = NK.products.filter((product) => product && product.price);
+    if (!products.length) {
+      NK.toast("Ni izdelkov za demo naročilo.", "info");
+      return;
+    }
+    const chosen = [];
+    const wanted = 1 + Math.floor(Math.random() * 2);
+    while (chosen.length < wanted && chosen.length < products.length) {
+      const product = products[Math.floor(Math.random() * products.length)];
+      if (!chosen.some((item) => item.id === product.id)) chosen.push(product);
+    }
+    const customers = [
+      {
+        name: "Maja Kovač",
+        email: "maja.kovac@example.com",
+        phone: "+386 41 555 120",
+        address: "Cvetna ulica 12",
+        postal: "1000",
+        city: "Ljubljana",
+        note: ""
+      },
+      {
+        name: "Luka Novak",
+        email: "luka.novak@example.com",
+        phone: "+386 51 442 908",
+        address: "Trg svobode 4",
+        postal: "2000",
+        city: "Maribor",
+        note: "Prosim za dostavo po 16. uri."
+      },
+      {
+        name: "Ana Horvat",
+        email: "ana.horvat@example.com",
+        phone: "+386 31 778 204",
+        address: "Obala 8",
+        postal: "6000",
+        city: "Koper",
+        note: ""
+      }
+    ];
+    const customer = customers[Math.floor(Math.random() * customers.length)];
+    const items = chosen.map((product) => ({
+      id: product.id,
+      name: product.name,
+      brand: product.brand,
+      qty: 1,
+      color: product.colors && product.colors[0] ? product.colors[0].name : "",
+      price: product.price,
+      lineTotal: product.price
+    }));
+    const subtotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
+    const shipping = subtotal >= 60 ? 0 : 4.9;
+    const now = new Date();
+    const order = {
+      id:
+        "DEMO-" +
+        now.getFullYear() +
+        String(now.getMonth() + 1).padStart(2, "0") +
+        String(now.getDate()).padStart(2, "0") +
+        "-" +
+        String(Math.floor(1000 + Math.random() * 9000)),
+      createdAt: now.toISOString(),
+      estimated: new Date(now.getTime() + 3 * 86400000).toISOString(),
+      status: "new",
+      demo: true,
+      customer: customer,
+      delivery: { method: "standard", label: "Standardna dostava", price: shipping },
+      payment: { method: "card", label: "Kartica", fee: 0 },
+      items: items,
+      totals: {
+        subtotal: subtotal,
+        discount: 0,
+        shipping: shipping,
+        fee: 0,
+        total: subtotal + shipping,
+        coupon: ""
+      }
+    };
+    const result = NK.appendOrder(order);
+    if (!result.ok) {
+      NK.toast("Demo naročila ni bilo mogoče dodati.", "info");
+      return;
+    }
+    renderOrders();
+    NK.toast("Dodano demo naročilo.", "success");
+  }
+
+  function bindOrders() {
+    const host = $("#admin-orders");
+    if (!host) return;
+    const refresh = host.querySelector("[data-order-refresh]");
+    if (refresh) refresh.addEventListener("click", renderOrders);
+    const demo = host.querySelector("[data-order-demo]");
+    if (demo) demo.addEventListener("click", addDemoOrder);
+    host.querySelectorAll("[data-order-approve]").forEach((button) => {
+      button.addEventListener("click", () =>
+        changeOrderStatus(button.getAttribute("data-order-approve"), "approved")
+      );
+    });
+    host.querySelectorAll("[data-order-ship]").forEach((button) => {
+      button.addEventListener("click", () =>
+        changeOrderStatus(button.getAttribute("data-order-ship"), "shipped")
+      );
+    });
+    host.querySelectorAll("[data-order-reset]").forEach((button) => {
+      button.addEventListener("click", () =>
+        changeOrderStatus(button.getAttribute("data-order-reset"), "new")
+      );
+    });
   }
 
   function bindTabs() {
@@ -742,6 +1080,8 @@
     });
     if (activeTab === "overview") {
       renderDashboard();
+    } else if (activeTab === "orders") {
+      renderOrders();
     }
   }
 

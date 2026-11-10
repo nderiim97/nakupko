@@ -49,7 +49,7 @@ Nato obiščite <http://127.0.0.1:8765/index.html>.
 
 Kodo vnesite v košarici. Uporabi se takoj in jo lahko kadarkoli odstranite.
 
-## Skrbništvo (pregled, izdelki, plačila)
+## Skrbništvo (pregled, naročila, izdelki, plačila)
 
 Odprite `admin.html` (povezava je tudi v nogi strani) in se prijavite z geslom:
 
@@ -57,9 +57,10 @@ Odprite `admin.html` (povezava je tudi v nogi strani) in se prijavite z geslom:
 12345678
 ```
 
-Skrbništvo ima tri zavihke:
+Skrbništvo ima štiri zavihke:
 
 - **Pregled** — nadzorna plošča z lokalno statistiko obiska (privzeti zavihek),
+- **Naročila** — pregled nakupov strank, podatki strank in odobritev pošiljanja,
 - **Izdelki** — dodajanje, urejanje in odstranjevanje izdelkov,
 - **Plačila** — povezava Stripe Payment Link za kartično plačilo.
 
@@ -78,6 +79,30 @@ strani, države obiskovalcev in zadnjo aktivnost.
 - Gumba **Demo podatki** in **Vstavi demo podatke** dodata naključne vzorčne dogodke za
   preizkus plošče. Gumb **Počisti** odstrani vso lokalno statistiko.
 - Statistika skrbniških strani se ne beleži, da pregled ne vpliva na številke.
+
+### Naročila strank
+
+V zavihku **Naročila** so prikazani vsi nakupi, opravljeni v tem brskalniku. Za vsako
+naročilo vidite:
+
+- številko naročila, datum in status (Novo, Odobreno, Poslano),
+- podatke stranke: ime, e-pošto, telefon, naslov dostave in opombo,
+- naročene izdelke s količinami, barvami in cenami,
+- način dostave, način plačila in celoten znesek.
+
+Potek odobritve:
+
+1. Pri novem naročilu kliknite **Odobri pošiljko** — status se spremeni v **Odobreno**.
+2. Ko je paket predan dostavi, kliknite **Označi kot poslano** — status se spremeni v
+   **Poslano**.
+3. Z gumbom **Razveljavi** lahko status vrnete na **Novo** (uporabno za demo).
+
+Gumb **Demo naročilo** doda vzorčno naročilo z izmišljeno stranko, da si lahko ogledate
+potek brez pravega nakupa. Demo naročila so označena z značko `demo`.
+
+> **Demo omejitev:** odobritev je samo lokalna oznaka. Pravega e-poštnega obvestila ali
+> povezave z dostavno službo ni, ker stran nima strežnika. Naročila so shranjena pod
+> ključem `nakupko.orders.v1` (največ 20) in ostanejo samo v tem brskalniku.
 
 ### Urejanje izdelkov
 
@@ -127,6 +152,9 @@ vidite le na tej napravi.
   Linkom se obiskovalec preusmeri na pravo Stripe stran, a z vnaprej določenim zneskom.
 - **Lokalna statistika.** Obisk se meri samo v brskalniku, brez piškotkov in brez pošiljanja
   podatkov. Primerna je za demo, ne za pravo analitiko.
+- **Naročila so lokalna.** Nakupi se shranijo v istem brskalniku, kjer je bil nakup opravljen,
+  zato jih v skrbništvu vidite le na tej napravi. Odobritev pošiljke je demo oznaka brez
+  pravega obvestila stranki.
 - **Odgovorna postavitev.** Prilagojena je namizju, tablicam in telefonom.
 - **Dostopnost.** Uporabljeni so skip-link, fokusni obrisi, oznake obrazcev in `aria` atributi.
 
@@ -144,7 +172,7 @@ nakupko/
 │     ├─ art.js            originalne SVG ilustracije in ikone
 │     ├─ core.js           stanje, košarica, seznam želja, iskanje, lokalna statistika, Stripe
 │     ├─ pages.js          krmilniki posameznih strani
-│     └─ admin.js          demo prijava, nadzorna plošča, izdelki in Stripe nastavitve
+│     └─ admin.js          demo prijava, nadzorna plošča, naročila, izdelki in Stripe
 └─ README.md
 ```
 

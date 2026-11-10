@@ -929,6 +929,7 @@
         id: "NK-" + stamp + "-" + String(Math.floor(1000 + Math.random() * 9000)),
         createdAt: now.toISOString(),
         estimated: new Date(now.getTime() + 3 * 86400000).toISOString(),
+        status: "new",
         customer: {
           email: String(data.get("email") || "").trim(),
           name: String(data.get("name") || "").trim(),

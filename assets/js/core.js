@@ -1476,6 +1476,48 @@
     });
   }
 
+  const ORDER_STATUSES = ["new", "approved", "shipped"];
+
+  function getOrders() {
+    const stored = read(KEYS.orders, []);
+    return Array.isArray(stored) ? stored.filter((order) => order && order.id) : [];
+  }
+
+  function appendOrder(order) {
+    if (!order || !order.id) return { ok: false, message: "Naročilo ni veljavno." };
+    const orders = getOrders();
+    const entry = Object.assign({ status: "new" }, order);
+    orders.push(entry);
+    write(KEYS.orders, orders.slice(-20));
+    return { ok: true, order: entry };
+  }
+
+  function updateOrderStatus(orderId, status) {
+    if (ORDER_STATUSES.indexOf(status) < 0) {
+      return { ok: false, message: "Neznan status naročila." };
+    }
+    const orders = getOrders();
+    let updated = null;
+    const next = orders.map((order) => {
+      if (order.id !== orderId) return order;
+      updated = Object.assign({}, order, {
+        status: status,
+        statusUpdatedAt: new Date().toISOString()
+      });
+      if (status === "approved") updated.approvedAt = updated.statusUpdatedAt;
+      if (status === "shipped") {
+        updated.approvedAt = updated.approvedAt || updated.statusUpdatedAt;
+        updated.shippedAt = updated.statusUpdatedAt;
+      }
+      return updated;
+    });
+    if (!updated) return { ok: false, message: "Naročilo ni najdeno." };
+    write(KEYS.orders, next.slice(-20));
+    const last = read(KEYS.lastOrder, null);
+    if (last && last.id === orderId) write(KEYS.lastOrder, updated);
+    return { ok: true, order: updated };
+  }
+
   function saveOrder(order) {
     if (order && order.totals) {
       track("order", {
@@ -1485,10 +1527,8 @@
         payment: order.payment ? order.payment.method : ""
       });
     }
-    const orders = read(KEYS.orders, []);
-    orders.push(order);
-    write(KEYS.orders, orders.slice(-20));
-    write(KEYS.lastOrder, order);
+    const result = appendOrder(order);
+    write(KEYS.lastOrder, result.order || order);
     state.cart = [];
     state.coupon = "";
     write(KEYS.cart, state.cart);
@@ -1539,6 +1579,9 @@
     openDrawer: openDrawer,
     closeDrawers: closeDrawers,
     saveOrder: saveOrder,
+    getOrders: getOrders,
+    appendOrder: appendOrder,
+    updateOrderStatus: updateOrderStatus,
     getLastOrder: getLastOrder,
     track: track,
     getAnalyticsEvents: getAnalyticsEvents,
