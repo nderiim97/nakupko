@@ -13,8 +13,13 @@
     orders: "nakupko.orders.v1",
     lastOrder: "nakupko.last-order.v1",
     customProducts: "nakupko.custom-products.v1",
-    hiddenProducts: "nakupko.hidden-products.v1"
+    hiddenProducts: "nakupko.hidden-products.v1",
+    analytics: "nakupko.analytics.v1",
+    analyticsVisitor: "nakupko.analytics.visitor.v1",
+    stripe: "nakupko.stripe.v1"
   };
+
+  const ANALYTICS_LIMIT = 1200;
 
   const moneyFormatter = new Intl.NumberFormat("sl-SI", {
     style: "currency",
@@ -40,6 +45,282 @@
       window.localStorage.setItem(key, JSON.stringify(value));
     } catch (error) {
       /* Private mode or file:// restrictions: the demo still works in memory. */
+    }
+  }
+
+  /* ------------------------------------------------------- local analytics
+     Demo-only: events stay in this browser. No cookies, no network calls. */
+  const COUNTRY_NAMES = {
+    SI: "Slovenija",
+    HR: "Hrvaška",
+    RS: "Srbija",
+    BA: "Bosna in Hercegovina",
+    ME: "Črna gora",
+    MK: "Severna Makedonija",
+    AL: "Albanija",
+    XK: "Kosovo",
+    AT: "Avstrija",
+    IT: "Italija",
+    DE: "Nemčija",
+    FR: "Francija",
+    HU: "Madžarska",
+    SK: "Slovaška",
+    CZ: "Češka",
+    PL: "Poljska",
+    NL: "Nizozemska",
+    BE: "Belgija",
+    LU: "Luksemburg",
+    ES: "Španija",
+    PT: "Portugalska",
+    GB: "Združeno kraljestvo",
+    IE: "Irska",
+    SE: "Švedska",
+    NO: "Norveška",
+    DK: "Danska",
+    FI: "Finska",
+    IS: "Islandija",
+    CH: "Švica",
+    GR: "Grčija",
+    BG: "Bolgarija",
+    RO: "Romunija",
+    MD: "Moldavija",
+    UA: "Ukrajina",
+    RU: "Rusija",
+    TR: "Turčija",
+    US: "ZDA",
+    CA: "Kanada",
+    MX: "Mehika",
+    BR: "Brazilija",
+    AR: "Argentina",
+    AU: "Avstralija",
+    NZ: "Nova Zelandija",
+    JP: "Japonska",
+    KR: "Južna Koreja",
+    CN: "Kitajska",
+    IN: "Indija",
+    SG: "Singapur",
+    AE: "Združeni arabski emirati",
+    IL: "Izrael",
+    EG: "Egipt",
+    ZA: "Južna Afrika"
+  };
+
+  const TIMEZONE_COUNTRIES = {
+    "Europe/Ljubljana": "SI",
+    "Europe/Zagreb": "HR",
+    "Europe/Belgrade": "RS",
+    "Europe/Sarajevo": "BA",
+    "Europe/Podgorica": "ME",
+    "Europe/Skopje": "MK",
+    "Europe/Tirane": "AL",
+    "Europe/Pristina": "XK",
+    "Europe/Vienna": "AT",
+    "Europe/Rome": "IT",
+    "Europe/Berlin": "DE",
+    "Europe/Paris": "FR",
+    "Europe/Budapest": "HU",
+    "Europe/Bratislava": "SK",
+    "Europe/Prague": "CZ",
+    "Europe/Warsaw": "PL",
+    "Europe/Amsterdam": "NL",
+    "Europe/Brussels": "BE",
+    "Europe/Luxembourg": "LU",
+    "Europe/Madrid": "ES",
+    "Europe/Lisbon": "PT",
+    "Europe/London": "GB",
+    "Europe/Dublin": "IE",
+    "Europe/Stockholm": "SE",
+    "Europe/Oslo": "NO",
+    "Europe/Copenhagen": "DK",
+    "Europe/Helsinki": "FI",
+    "Atlantic/Reykjavik": "IS",
+    "Europe/Zurich": "CH",
+    "Europe/Athens": "GR",
+    "Europe/Sofia": "BG",
+    "Europe/Bucharest": "RO",
+    "Europe/Chisinau": "MD",
+    "Europe/Kyiv": "UA",
+    "Europe/Moscow": "RU",
+    "Europe/Istanbul": "TR",
+    "America/New_York": "US",
+    "America/Chicago": "US",
+    "America/Denver": "US",
+    "America/Los_Angeles": "US",
+    "America/Toronto": "CA",
+    "America/Vancouver": "CA",
+    "America/Mexico_City": "MX",
+    "America/Sao_Paulo": "BR",
+    "America/Argentina/Buenos_Aires": "AR",
+    "Australia/Sydney": "AU",
+    "Australia/Melbourne": "AU",
+    "Pacific/Auckland": "NZ",
+    "Asia/Tokyo": "JP",
+    "Asia/Seoul": "KR",
+    "Asia/Shanghai": "CN",
+    "Asia/Kolkata": "IN",
+    "Asia/Singapore": "SG",
+    "Asia/Dubai": "AE",
+    "Asia/Jerusalem": "IL",
+    "Africa/Cairo": "EG",
+    "Africa/Johannesburg": "ZA"
+  };
+
+  function detectCountry() {
+    const locales = [];
+    try {
+      if (navigator.languages && navigator.languages.length) {
+        Array.prototype.push.apply(locales, navigator.languages);
+      }
+      if (navigator.language) locales.push(navigator.language);
+    } catch (error) {
+      /* navigator may be restricted in unusual embeds */
+    }
+    for (let index = 0; index < locales.length; index += 1) {
+      const match = String(locales[index] || "").match(/[-_]([a-zA-Z]{2})$/);
+      if (match) {
+        const code = match[1].toUpperCase();
+        if (COUNTRY_NAMES[code]) return { code: code, name: COUNTRY_NAMES[code] };
+      }
+    }
+    try {
+      const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (zone && TIMEZONE_COUNTRIES[zone]) {
+        const code = TIMEZONE_COUNTRIES[zone];
+        return { code: code, name: COUNTRY_NAMES[code] || code };
+      }
+    } catch (error) {
+      /* Intl may be unavailable */
+    }
+    return { code: "", name: "Neznano" };
+  }
+
+  const visitorCountry = detectCountry();
+  let cachedVisitorId = "";
+
+  function visitorId() {
+    if (cachedVisitorId) return cachedVisitorId;
+    let stored = "";
+    try {
+      stored = window.localStorage.getItem(KEYS.analyticsVisitor) || "";
+      stored = stored ? JSON.parse(stored) : "";
+    } catch (error) {
+      stored = "";
+    }
+    if (!stored || typeof stored !== "string") {
+      stored = "v-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+      write(KEYS.analyticsVisitor, stored);
+    }
+    cachedVisitorId = stored;
+    return stored;
+  }
+
+  function getAnalyticsEvents() {
+    const stored = read(KEYS.analytics, []);
+    return Array.isArray(stored) ? stored.filter((event) => event && event.type) : [];
+  }
+
+  function appendAnalyticsEvents(events) {
+    if (!Array.isArray(events) || !events.length) return;
+    const merged = getAnalyticsEvents().concat(events.filter((event) => event && event.type));
+    merged.sort((a, b) => (Number(a.t) || 0) - (Number(b.t) || 0));
+    write(KEYS.analytics, merged.slice(-ANALYTICS_LIMIT));
+  }
+
+  function track(type, data) {
+    if (!type) return;
+    const page = document.body ? document.body.getAttribute("data-page") || "" : "";
+    if (page === "admin") return;
+    const payload = data || {};
+    appendAnalyticsEvents([
+      Object.assign(
+        {
+          t: Date.now(),
+          type: type,
+          page: page || "other",
+          country: visitorCountry.code,
+          countryName: visitorCountry.name,
+          visitor: visitorId()
+        },
+        payload
+      )
+    ]);
+  }
+
+  function clearAnalytics() {
+    try {
+      window.localStorage.removeItem(KEYS.analytics);
+    } catch (error) {
+      /* ignore blocked storage */
+    }
+  }
+
+  /* ---------------------------------------------------------- Stripe demo */
+  function isValidStripeLink(value) {
+    const link = String(value || "").trim();
+    return /^https:\/\/(buy|checkout)\.stripe\.com\/[^\s]+$/i.test(link);
+  }
+
+  function getStripeSettings() {
+    const stored = read(KEYS.stripe, {});
+    const data = stored && typeof stored === "object" ? stored : {};
+    return {
+      enabled: data.enabled === true,
+      paymentLink: typeof data.paymentLink === "string" ? data.paymentLink : "",
+      publishableKey: typeof data.publishableKey === "string" ? data.publishableKey : "",
+      updatedAt: Number(data.updatedAt) || 0
+    };
+  }
+
+  function saveStripeSettings(input) {
+    const data = input || {};
+    const paymentLink = String(data.paymentLink || "").trim();
+    const publishableKey = String(data.publishableKey || "").trim();
+    const enabled = data.enabled === true;
+
+    if (/^sk_/i.test(paymentLink) || /^sk_/i.test(publishableKey)) {
+      return {
+        ok: false,
+        message: "Skrivnega ključa (sk_...) nikoli ne shranjujte v brskalnik. Uporabite javni Payment Link."
+      };
+    }
+    if (enabled && !isValidStripeLink(paymentLink)) {
+      return {
+        ok: false,
+        message: "Vnesite veljavno Stripe Payment Link povezavo, npr. https://buy.stripe.com/..."
+      };
+    }
+    if (paymentLink && !isValidStripeLink(paymentLink)) {
+      return {
+        ok: false,
+        message: "Payment Link se mora začeti s https://buy.stripe.com/ ali https://checkout.stripe.com/."
+      };
+    }
+    if (publishableKey && !/^pk_(test|live)_[A-Za-z0-9]+$/.test(publishableKey)) {
+      return {
+        ok: false,
+        message: "Publishable key se začne s pk_test_ ali pk_live_."
+      };
+    }
+
+    const settings = {
+      enabled: enabled,
+      paymentLink: paymentLink,
+      publishableKey: publishableKey,
+      updatedAt: Date.now()
+    };
+    write(KEYS.stripe, settings);
+    return { ok: true, settings: settings };
+  }
+
+  function stripeCheckoutUrl(orderId) {
+    const settings = getStripeSettings();
+    if (!settings.enabled || !isValidStripeLink(settings.paymentLink)) return "";
+    try {
+      const url = new URL(settings.paymentLink);
+      if (orderId) url.searchParams.set("client_reference_id", orderId);
+      return url.toString();
+    } catch (error) {
+      return settings.paymentLink;
     }
   }
 
@@ -480,6 +761,12 @@
       state.cart.push({ key: key, id: id, qty: amount, color: chosen });
     }
     saveCart();
+    track("add-to-cart", {
+      id: product.id,
+      name: product.name,
+      qty: amount,
+      price: product.price
+    });
     toast(product.name + " je v košarici.", "success");
     openDrawer($("#cart-drawer"));
   }
@@ -1045,6 +1332,25 @@
     document.addEventListener("click", (event) => {
       const target = event.target;
 
+      const productLink = target.closest('a[href*="product.html"]');
+      if (productLink) {
+        const href = productLink.getAttribute("href") || "";
+        const match = href.match(/[?&]id=([^&]+)/);
+        if (match) {
+          try {
+            const id = decodeURIComponent(match[1]);
+            const product = getProduct(id);
+            track("product-click", {
+              id: id,
+              name: product ? product.name : id,
+              source: document.body ? document.body.getAttribute("data-page") || "" : ""
+            });
+          } catch (error) {
+            /* A malformed link should never block navigation. */
+          }
+        }
+      }
+
       const add = target.closest("[data-add]");
       if (add) {
         event.preventDefault();
@@ -1165,9 +1471,20 @@
     updateBadges();
     bindGlobalEvents();
     document.body.classList.add("js-ready");
+    track("pageview", {
+      path: window.location.pathname + window.location.search
+    });
   }
 
   function saveOrder(order) {
+    if (order && order.totals) {
+      track("order", {
+        orderId: order.id,
+        total: order.totals.total,
+        items: (order.items || []).length,
+        payment: order.payment ? order.payment.method : ""
+      });
+    }
     const orders = read(KEYS.orders, []);
     orders.push(order);
     write(KEYS.orders, orders.slice(-20));
@@ -1223,6 +1540,18 @@
     closeDrawers: closeDrawers,
     saveOrder: saveOrder,
     getLastOrder: getLastOrder,
+    track: track,
+    getAnalyticsEvents: getAnalyticsEvents,
+    appendAnalyticsEvents: appendAnalyticsEvents,
+    clearAnalytics: clearAnalytics,
+    detectCountry: detectCountry,
+    countryName: function (code) {
+      return COUNTRY_NAMES[String(code || "").toUpperCase()] || "Neznano";
+    },
+    getStripeSettings: getStripeSettings,
+    saveStripeSettings: saveStripeSettings,
+    isValidStripeLink: isValidStripeLink,
+    stripeCheckoutUrl: stripeCheckoutUrl,
     initGlobal: initGlobal
   });
 })();

@@ -5,6 +5,7 @@
   const NK = window.NK;
   const ART = window.NKArt;
   const $ = (selector, root) => (root || document).querySelector(selector);
+  const $$ = (selector, root) => Array.from((root || document).querySelectorAll(selector));
 
   const PASSWORD = "12345678";
   const SESSION_KEY = "nakupko.admin.session";
@@ -36,6 +37,29 @@
   ];
 
   let editingId = "";
+  let activeTab = "overview";
+  const DAY_MS = 86400000;
+  const PAGE_LABELS = {
+    home: "Domov",
+    category: "Kategorija",
+    search: "Iskanje",
+    product: "Izdelek",
+    cart: "Košarica",
+    checkout: "Blagajna",
+    wishlist: "Seznam želja",
+    order: "Naročilo",
+    info: "Informacije",
+    other: "Drugo"
+  };
+  const EVENT_LABELS = {
+    pageview: "Ogled strani",
+    "product-click": "Klik na izdelek",
+    "product-view": "Ogled izdelka",
+    "add-to-cart": "Dodano v košarico",
+    search: "Iskanje",
+    checkout: "Začetek blagajne",
+    order: "Naročilo"
+  };
 
   function isLoggedIn() {
     try {
@@ -159,6 +183,18 @@
     );
   }
 
+  function tabButton(name, label, icon) {
+    return (
+      '<button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-tab="' +
+      name +
+      '">' +
+      ART.icon(icon, 17) +
+      "<span>" +
+      label +
+      "</span></button>"
+    );
+  }
+
   function renderPanel() {
     editingId = "";
     const items = adminCatalog();
@@ -166,11 +202,20 @@
 
     root.innerHTML =
       '<div class="admin-top">' +
-      '<p class="admin-note">Osnovne izdelke lahko odstranite in jih pozneje vrnete, svoje pa trajno izbrišete. Novi izdelki so shranjeni v <code>localStorage</code> tega brskalnika.</p>' +
+      '<p class="admin-note">Pregled obiska, urejanje izdelkov in povezava Stripe plačil. Vsi podatki ostanejo samo v <code>localStorage</code> tega brskalnika.</p>' +
       '<div class="admin-top__actions">' +
       '<a class="btn btn--soft" href="index.html">Odpri trgovino</a>' +
       '<button class="btn btn--ghost" type="button" id="admin-logout">Odjava</button>' +
       "</div></div>" +
+      '<div class="admin-tabs" role="tablist" aria-label="Skrbniški razdelki">' +
+      tabButton("overview", "Pregled", "spark") +
+      tabButton("products", "Izdelki", "cart") +
+      tabButton("payments", "Plačila", "lock") +
+      "</div>" +
+      '<section class="admin-view" data-admin-view="overview">' +
+      '<div id="admin-dashboard"></div>' +
+      "</section>" +
+      '<section class="admin-view" data-admin-view="products" hidden>' +
       '<div class="admin-layout">' +
       '<section class="admin-card admin-form-card">' +
       '<div class="admin-card__head"><div><h2 id="admin-form-title">Dodaj izdelek</h2><p>Izberite rubriko, nastavite ceno in shranite.</p></div></div>' +
@@ -218,18 +263,606 @@
       '<input id="admin-search" type="search" placeholder="Iskanje po nazivu, rubriki ali šifri" autocomplete="off"></div>' +
       '<div class="admin-list admin-list--scroll" id="admin-list"></div>' +
       '<div id="admin-hidden-wrap"></div>' +
-      "</section></div>";
+      "</section></div></section>" +
+      '<section class="admin-view" data-admin-view="payments" hidden>' +
+      stripePanelHtml() +
+      "</section>";
 
     renderList();
     renderHidden();
     bindSearch();
     bindForm();
+    bindTabs();
+    bindStripeForm();
 
     const logout = $("#admin-logout");
     if (logout) {
       logout.addEventListener("click", () => {
         setLoggedIn(false);
         renderLogin();
+      });
+    }
+  }
+
+  /* ------------------------------------------------------------ dashboard */
+  function localDayKey(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return (
+      date.getFullYear() +
+      "-" +
+      String(date.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(date.getDate()).padStart(2, "0")
+    );
+  }
+
+  function dayShort(date) {
+    return ["ned", "pon", "tor", "sre", "čet", "pet", "sob"][date.getDay()];
+  }
+
+  function slPlural(count, forms) {
+    const value = Math.abs(Number(count) || 0);
+    const mod100 = value % 100;
+    const mod10 = value % 10;
+    if (mod100 === 1) return forms[0];
+    if (mod100 === 2) return forms[1];
+    if (mod100 === 3 || mod100 === 4) return forms[2];
+    return forms[3];
+  }
+
+  function pageLabel(page) {
+    return PAGE_LABELS[page] || page || "Drugo";
+  }
+
+  function eventTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const today = localDayKey(Date.now());
+    const time = date.toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" });
+    return localDayKey(date) === today ? time : NK.longDate(date) + " · " + time;
+  }
+
+  function eventDetail(event) {
+    if (!event) return "";
+    if (event.type === "pageview") return pageLabel(event.page);
+    if (event.type === "search") return "„" + String(event.query || "") + "“";
+    if (event.type === "checkout") {
+      return (event.items || 0) + " " + slPlural(event.items || 0, ["izdelek", "izdelka", "izdelki", "izdelkov"]);
+    }
+    if (event.type === "order") {
+      return (event.orderId || "") + " · " + NK.money(event.total || 0);
+    }
+    return event.name || event.id || "";
+  }
+
+  function dashboardData() {
+    const events = NK.getAnalyticsEvents();
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const weekStart = todayStart - 6 * DAY_MS;
+    const week = events.filter((event) => Number(event.t) >= weekStart);
+    const pageviews = events.filter((event) => event.type === "pageview");
+    const weekPageviews = week.filter((event) => event.type === "pageview");
+    const clicks = events.filter((event) => event.type === "product-click");
+    const views = events.filter((event) => event.type === "product-view");
+    const adds = events.filter((event) => event.type === "add-to-cart");
+    const orders = events.filter((event) => event.type === "order");
+    const visitors = new Set(
+      week
+        .map((event) => event.visitor)
+        .filter((value) => Boolean(value))
+    );
+
+    const byProduct = new Map();
+    events.forEach((event) => {
+      if (!["product-click", "product-view", "add-to-cart"].includes(event.type)) return;
+      const key = event.id || event.name || "neznano";
+      const entry =
+        byProduct.get(key) || {
+          id: event.id || "",
+          name: event.name || event.id || "Neznan izdelek",
+          clicks: 0,
+          views: 0,
+          adds: 0
+        };
+      if (event.type === "product-click") entry.clicks += 1;
+      else if (event.type === "product-view") entry.views += 1;
+      else entry.adds += 1;
+      byProduct.set(key, entry);
+    });
+    const topProducts = Array.from(byProduct.values())
+      .sort((a, b) => b.clicks - a.clicks || b.views - a.views || b.adds - a.adds)
+      .slice(0, 6);
+
+    const byPage = new Map();
+    pageviews.forEach((event) => {
+      const key = event.page || "other";
+      byPage.set(key, (byPage.get(key) || 0) + 1);
+    });
+    const topPages = Array.from(byPage.entries())
+      .map(([page, count]) => ({ page: page, count: count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+
+    const byCountry = new Map();
+    pageviews.forEach((event) => {
+      const name = event.countryName || NK.countryName(event.country);
+      byCountry.set(name, (byCountry.get(name) || 0) + 1);
+    });
+    const countries = Array.from(byCountry.entries())
+      .map(([name, count]) => ({ name: name, count: count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+
+    const days = [];
+    for (let offset = 6; offset >= 0; offset -= 1) {
+      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset);
+      const key = localDayKey(date);
+      days.push({
+        key: key,
+        label: dayShort(date),
+        count: weekPageviews.filter((event) => localDayKey(event.t) === key).length
+      });
+    }
+
+    return {
+      events: events,
+      pageviews: pageviews.length,
+      weekPageviews: weekPageviews.length,
+      visitors: visitors.size,
+      clicks: clicks.length,
+      views: views.length,
+      adds: adds.length,
+      orders: orders.length,
+      revenue: orders.reduce((total, event) => total + (Number(event.total) || 0), 0),
+      topProducts: topProducts,
+      topPages: topPages,
+      countries: countries,
+      days: days,
+      recent: events.slice(-9).reverse()
+    };
+  }
+
+  function kpiCard(label, value, note, accent) {
+    return (
+      '<article class="kpi-card' +
+      (accent ? " kpi-card--accent" : "") +
+      '"><span class="kpi-card__label">' +
+      NK.escapeHtml(label) +
+      '</span><strong>' +
+      NK.escapeHtml(value) +
+      "</strong><small>" +
+      NK.escapeHtml(note) +
+      "</small></article>"
+    );
+  }
+
+  function chartHtml(days) {
+    const max = Math.max.apply(
+      null,
+      days.map((day) => day.count).concat([1])
+    );
+    return (
+      '<div class="dash-chart" role="img" aria-label="Ogledi strani v zadnjih sedmih dneh">' +
+      days
+        .map((day) => {
+          const height = day.count ? Math.max(8, Math.round((day.count / max) * 100)) : 3;
+          return (
+            '<div class="dash-chart__col">' +
+            '<span class="dash-chart__count">' +
+            day.count +
+            "</span>" +
+            '<span class="dash-chart__track"><span class="dash-chart__bar" style="height:' +
+            height +
+            '%"></span></span>' +
+            '<span class="dash-chart__day">' +
+            day.label +
+            "</span></div>"
+          );
+        })
+        .join("") +
+      "</div>"
+    );
+  }
+
+  function productsHtml(products) {
+    if (!products.length) {
+      return '<p class="dash-empty">Ni še klikov na izdelke. Odprite trgovino in kliknite izdelek.</p>';
+    }
+    return (
+      '<ol class="rank-list">' +
+      products
+        .map((product, index) => {
+          const parts = [
+            product.clicks + " " + slPlural(product.clicks, ["klik", "klika", "kliki", "klikov"]),
+            product.views + " " + slPlural(product.views, ["ogled", "ogleda", "ogledi", "ogledov"]),
+            product.adds + " v košarici"
+          ];
+          return (
+            '<li class="rank-row">' +
+            '<span class="rank-row__num">' +
+            (index + 1) +
+            "</span>" +
+            '<span class="rank-row__main"><strong>' +
+            NK.escapeHtml(product.name) +
+            "</strong><small>" +
+            NK.escapeHtml(parts.join(" · ")) +
+            "</small></span>" +
+            '<span class="rank-row__value"><strong>' +
+            product.clicks +
+            '</strong><small>klikov</small></span></li>'
+          );
+        })
+        .join("") +
+      "</ol>"
+    );
+  }
+
+  function pagesHtml(pages, total) {
+    if (!pages.length) {
+      return '<p class="dash-empty">Ni še ogledov strani.</p>';
+    }
+    return (
+      '<ul class="page-list">' +
+      pages
+        .map((item) => {
+          const share = total ? Math.round((item.count / total) * 100) : 0;
+          return (
+            '<li class="page-row"><div class="page-row__head"><strong>' +
+            NK.escapeHtml(pageLabel(item.page)) +
+            "</strong><span>" +
+            item.count +
+            " · " +
+            share +
+            '%</span></div><span class="page-row__bar"><span style="width:' +
+            Math.max(3, share) +
+            '%"></span></span></li>'
+          );
+        })
+        .join("") +
+      "</ul>"
+    );
+  }
+
+  function countriesHtml(countries, total) {
+    if (!countries.length) {
+      return '<p class="dash-empty">Država bo prikazana, ko bo zabeležen vsaj en obisk.</p>';
+    }
+    return (
+      '<ul class="country-list">' +
+      countries
+        .map((item) => {
+          const share = total ? Math.round((item.count / total) * 100) : 0;
+          return (
+            '<li class="country-row"><div class="country-row__head"><strong>' +
+            NK.escapeHtml(item.name) +
+            "</strong><span>" +
+            item.count +
+            " · " +
+            share +
+            '%</span></div><span class="country-row__bar"><span style="width:' +
+            Math.max(3, share) +
+            '%"></span></span></li>'
+          );
+        })
+        .join("") +
+      "</ul>" +
+      '<p class="dash-footnote">Država je približna in izhaja iz jezika brskalnika ter časovnega pasu.</p>'
+    );
+  }
+
+  function activityHtml(events) {
+    if (!events.length) {
+      return '<p class="dash-empty">Ni še zabeležene aktivnosti.</p>';
+    }
+    return (
+      '<ul class="activity-list">' +
+      events
+        .map(
+          (event) =>
+            '<li class="activity-row"><span class="activity-row__dot" aria-hidden="true"></span><span class="activity-row__main"><strong>' +
+            NK.escapeHtml(EVENT_LABELS[event.type] || event.type) +
+            "</strong><small>" +
+            NK.escapeHtml(eventDetail(event)) +
+            '</small></span><time datetime="' +
+            new Date(event.t).toISOString() +
+            '">' +
+            NK.escapeHtml(eventTime(event.t)) +
+            "</time></li>"
+        )
+        .join("") +
+      "</ul>"
+    );
+  }
+
+  function dashboardHtml() {
+    const data = dashboardData();
+    return (
+      '<div class="admin-dash">' +
+      '<div class="dash-head"><div><h2>Pregled obiska</h2><p>Lokalna statistika tega brskalnika. Podatki se ne pošiljajo nikamor.</p></div>' +
+      '<div class="dash-actions">' +
+      '<button class="btn btn--soft" type="button" data-dash-refresh>Osveži</button>' +
+      '<button class="btn btn--soft" type="button" data-dash-seed>Demo podatki</button>' +
+      '<button class="btn btn--ghost admin-danger" type="button" data-dash-clear>Počisti</button>' +
+      "</div></div>" +
+      '<div class="kpi-grid">' +
+      kpiCard("Ogledi strani", data.pageviews, data.weekPageviews + " v zadnjih 7 dneh", false) +
+      kpiCard("Obiskovalci", data.visitors, "edinstveni v zadnjih 7 dneh", true) +
+      kpiCard("Kliki na izdelke", data.clicks, data.views + " ogledov izdelkov", false) +
+      kpiCard("Naročila", data.orders, NK.money(data.revenue) + " skupaj", false) +
+      "</div>" +
+      '<div class="dash-grid">' +
+      '<section class="dash-card"><div class="dash-card__head"><div><h2>Promet v 7 dneh</h2><p>Ogledi strani po dnevih</p></div><span class="dash-pill">' +
+      data.weekPageviews +
+      " ogledov</span></div>" +
+      chartHtml(data.days) +
+      "</section>" +
+      '<section class="dash-card"><div class="dash-card__head"><div><h2>Države obiskovalcev</h2><p>Približno glede na brskalnik</p></div></div>' +
+      countriesHtml(data.countries, data.pageviews) +
+      "</section></div>" +
+      '<div class="dash-grid">' +
+      '<section class="dash-card"><div class="dash-card__head"><div><h2>Najbolj klikani izdelki</h2><p>Klik na izdelek, ogled in košarica</p></div></div>' +
+      productsHtml(data.topProducts) +
+      "</section>" +
+      '<section class="dash-card"><div class="dash-card__head"><div><h2>Najbolj obiskane strani</h2><p>Delež vseh ogledov strani</p></div></div>' +
+      pagesHtml(data.topPages, data.pageviews) +
+      "</section></div>" +
+      '<section class="dash-card"><div class="dash-card__head"><div><h2>Zadnja aktivnost</h2><p>Najnovejši dogodki v tem brskalniku</p></div><button class="btn btn--soft" type="button" data-dash-seed>Vstavi demo podatke</button></div>' +
+      activityHtml(data.recent) +
+      "</section>" +
+      '<p class="dash-footnote">Demo statistika: vsi dogodki so shranjeni lokalno pod ključem <code>nakupko.analytics.v1</code>. Za pravo analitiko bi potrebovali strežnik in soglasje obiskovalcev.</p>' +
+      "</div>"
+    );
+  }
+
+  function renderDashboard() {
+    const host = $("#admin-dashboard");
+    if (!host) return;
+    host.innerHTML = dashboardHtml();
+    bindDashboard();
+  }
+
+  function seedDemoAnalytics() {
+    const products = NK.products.slice(0, 10);
+    if (!products.length) {
+      NK.toast("Najprej dodajte vsaj en izdelek.", "info");
+      return;
+    }
+    const countries = [
+      ["SI", "Slovenija"],
+      ["SI", "Slovenija"],
+      ["SI", "Slovenija"],
+      ["HR", "Hrvaška"],
+      ["HR", "Hrvaška"],
+      ["RS", "Srbija"],
+      ["BA", "Bosna in Hercegovina"],
+      ["AT", "Avstrija"],
+      ["IT", "Italija"],
+      ["DE", "Nemčija"]
+    ];
+    const pages = ["home", "home", "home", "category", "category", "product", "search", "cart", "checkout", "wishlist"];
+    const now = Date.now();
+    const events = [];
+
+    for (let day = 6; day >= 0; day -= 1) {
+      const dayStart = now - day * DAY_MS;
+      const visits = 10 + Math.floor(Math.random() * 16);
+      for (let index = 0; index < visits; index += 1) {
+        const t = dayStart - Math.floor(Math.random() * 9 * 3600000);
+        const country = countries[Math.floor(Math.random() * countries.length)];
+        const visitor = "demo-v" + Math.floor(Math.random() * 22);
+        const page = pages[Math.floor(Math.random() * pages.length)];
+        const base = {
+          t: t,
+          country: country[0],
+          countryName: country[1],
+          visitor: visitor,
+          demo: true
+        };
+        events.push(Object.assign({ type: "pageview", page: page }, base));
+        if (Math.random() < 0.6) {
+          const product = products[Math.floor(Math.random() * products.length)];
+          events.push(
+            Object.assign(
+              {
+                type: "product-click",
+                page: page,
+                id: product.id,
+                name: product.name,
+                source: page
+              },
+              base
+            )
+          );
+          if (Math.random() < 0.55) {
+            events.push(
+              Object.assign(
+                { type: "product-view", page: "product", id: product.id, name: product.name, category: product.category },
+                base
+              )
+            );
+          }
+          if (Math.random() < 0.3) {
+            events.push(
+              Object.assign(
+                { type: "add-to-cart", page: "product", id: product.id, name: product.name, qty: 1, price: product.price },
+                base
+              )
+            );
+          }
+        }
+        if (Math.random() < 0.12) {
+          events.push(Object.assign({ type: "order", page: "order", orderId: "DEMO-" + Math.floor(1000 + Math.random() * 9000), total: 20 + Math.random() * 180, items: 1 + Math.floor(Math.random() * 3) }, base));
+        }
+      }
+    }
+
+    events.sort((a, b) => a.t - b.t);
+    NK.appendAnalyticsEvents(events);
+    renderDashboard();
+    NK.toast("Dodanih je " + events.length + " demo dogodkov.", "success");
+  }
+
+  function bindDashboard() {
+    const host = $("#admin-dashboard");
+    if (!host) return;
+    const refresh = host.querySelector("[data-dash-refresh]");
+    if (refresh) refresh.addEventListener("click", renderDashboard);
+    host.querySelectorAll("[data-dash-seed]").forEach((button) => {
+      button.addEventListener("click", seedDemoAnalytics);
+    });
+    const clear = host.querySelector("[data-dash-clear]");
+    if (clear) {
+      clear.addEventListener("click", () => {
+        if (!window.confirm("Počistim vso lokalno statistiko obiska? Tega dejanja ni mogoče razveljaviti.")) return;
+        NK.clearAnalytics();
+        renderDashboard();
+        NK.toast("Statistika je počiščena.", "success");
+      });
+    }
+  }
+
+  function bindTabs() {
+    $$("[data-admin-tab]").forEach((button) => {
+      button.addEventListener("click", () => setAdminTab(button.getAttribute("data-admin-tab")));
+    });
+    setAdminTab(activeTab);
+  }
+
+  function setAdminTab(name) {
+    activeTab = name || "overview";
+    $$("[data-admin-tab]").forEach((button) => {
+      const active = button.getAttribute("data-admin-tab") === activeTab;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    $$("[data-admin-view]").forEach((view) => {
+      view.hidden = view.getAttribute("data-admin-view") !== activeTab;
+    });
+    if (activeTab === "overview") {
+      renderDashboard();
+    }
+  }
+
+  /* -------------------------------------------------------------- Stripe */
+  function stripeStatus(settings) {
+    if (settings.enabled && NK.isValidStripeLink(settings.paymentLink)) {
+      return { label: "Povezano", className: "is-on" };
+    }
+    if (settings.enabled) return { label: "Neveljavna povezava", className: "is-warn" };
+    return { label: "Ni povezano", className: "is-off" };
+  }
+
+  function stripePanelHtml() {
+    const settings = NK.getStripeSettings();
+    const status = stripeStatus(settings);
+    const openHidden = NK.isValidStripeLink(settings.paymentLink) ? "" : " hidden";
+    return (
+      '<div class="admin-layout admin-layout--payments">' +
+      '<section class="admin-card">' +
+      '<div class="admin-card__head"><div><h2>Stripe plačila</h2><p>Povežite Payment Link in na blagajni omogočite plačilo s kartico.</p></div>' +
+      '<span class="admin-status ' +
+      status.className +
+      '" id="stripe-status">' +
+      status.label +
+      "</span></div>" +
+      '<form id="stripe-form" class="admin-form" novalidate>' +
+      '<label class="admin-toggle"><input id="stripe-enabled" name="enabled" type="checkbox"' +
+      (settings.enabled ? " checked" : "") +
+      '><span class="admin-toggle__track" aria-hidden="true"></span><span class="admin-toggle__text"><strong>Omogoči Stripe plačilo</strong><small>Na blagajni se prikaže dodatna možnost plačila s kartico.</small></span></label>' +
+      '<div class="field"><label for="stripe-link">Stripe Payment Link</label>' +
+      '<input id="stripe-link" name="paymentLink" type="url" value="' +
+      NK.escapeHtml(settings.paymentLink) +
+      '" placeholder="https://buy.stripe.com/..." autocomplete="off">' +
+      '<p class="admin-field-hint">Povezavo ustvarite v Stripe nadzorni plošči pod <strong>Payment Links</strong>.</p></div>' +
+      '<div class="field"><label for="stripe-key">Publishable key <span>(neobvezno)</span></label>' +
+      '<input id="stripe-key" name="publishableKey" type="text" value="' +
+      NK.escapeHtml(settings.publishableKey) +
+      '" placeholder="pk_test_..." autocomplete="off">' +
+      '<p class="admin-field-hint">Za Payment Link ni potreben. Nikoli ne vnašajte skrivnega ključa <code>sk_...</code>.</p></div>' +
+      '<p class="admin-error" id="stripe-error" role="alert"></p>' +
+      '<div class="admin-form__actions">' +
+      '<button class="btn btn--primary" type="submit">Shrani nastavitve</button>' +
+      '<a class="btn btn--soft" id="stripe-open" href="' +
+      NK.escapeHtml(settings.paymentLink) +
+      '" target="_blank" rel="noopener"' +
+      openHidden +
+      ">Odpri Payment Link</a></div></form></section>" +
+      '<aside class="admin-card admin-stripe-help">' +
+      '<div class="admin-card__head"><div><h2>Kako povezati</h2><p>Trije koraki brez strežnika.</p></div></div>' +
+      '<ol class="admin-steps">' +
+      '<li><span>1</span><div><strong>Ustvarite Stripe račun</strong><p>Prijavite se v Stripe in odprite razdelek Payment Links.</p></div></li>' +
+      '<li><span>2</span><div><strong>Ustvarite plačilno povezavo</strong><p>Dodajte izdelek ali znesek ter kopirajte javno povezavo, ki se začne z <code>https://buy.stripe.com/</code>.</p></div></li>' +
+      '<li><span>3</span><div><strong>Prilepite in omogočite</strong><p>Povezavo prilepite levo, vklopite stikalo in shranite. Na blagajni se prikaže Stripe.</p></div></li>' +
+      "</ol>" +
+      '<div class="admin-note admin-note--warn"><strong>Demo omejitev:</strong> stran je statična. Payment Link ima vnaprej določen znesek, zato se vrednost košarice ne prenese samodejno. Naročilo se najprej shrani lokalno, nato sledi preusmeritev na Stripe. Nikoli ne shranjujte skrivnih ključev v brskalnik.</div>' +
+      "</aside></div>"
+    );
+  }
+
+  function showStripeError(message) {
+    const error = $("#stripe-error");
+    if (!error) return;
+    error.textContent = message || "";
+    error.classList.toggle("is-visible", Boolean(message));
+  }
+
+  function syncStripeStatus() {
+    const settings = NK.getStripeSettings();
+    const status = stripeStatus(settings);
+    const badge = $("#stripe-status");
+    if (badge) {
+      badge.textContent = status.label;
+      badge.className = "admin-status " + status.className;
+    }
+    const open = $("#stripe-open");
+    if (open) {
+      if (NK.isValidStripeLink(settings.paymentLink)) {
+        open.href = settings.paymentLink;
+        open.hidden = false;
+      } else {
+        open.hidden = true;
+      }
+    }
+  }
+
+  function bindStripeForm() {
+    const form = $("#stripe-form");
+    if (!form) return;
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      showStripeError("");
+      const result = NK.saveStripeSettings({
+        enabled: form.elements.enabled.checked,
+        paymentLink: form.elements.paymentLink.value,
+        publishableKey: form.elements.publishableKey.value
+      });
+      if (!result.ok) {
+        showStripeError(result.message);
+        return;
+      }
+      syncStripeStatus();
+      NK.toast(
+        result.settings.enabled
+          ? "Stripe je povezan. Možnost plačila je dodana na blagajno."
+          : "Stripe nastavitve so shranjene.",
+        "success"
+      );
+    });
+
+    const link = $("#stripe-link");
+    if (link) {
+      link.addEventListener("input", () => {
+        const open = $("#stripe-open");
+        if (!open) return;
+        if (NK.isValidStripeLink(link.value)) {
+          open.href = link.value.trim();
+          open.hidden = false;
+        } else {
+          open.hidden = true;
+        }
       });
     }
   }
@@ -341,6 +974,7 @@
         return;
       }
 
+      activeTab = "products";
       NK.toast(result.updated ? "Izdelek je posodobljen." : "Izdelek je dodan v trgovino.", "success");
       renderPanel();
     });
@@ -373,6 +1007,8 @@
     const form = $("#admin-form");
     if (!product || !form) return;
 
+    activeTab = "products";
+    setAdminTab("products");
     editingId = product.id;
     form.elements.name.value = product.name;
     form.elements.category.value = product.category;

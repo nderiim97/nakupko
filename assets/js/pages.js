@@ -496,6 +496,7 @@
       return;
     }
 
+    NK.track("search", { query: String(query).slice(0, 80) });
     let results = NK.searchProducts(query);
     const sortParam = params.get("sort") || "relevance";
     if (sort && ["relevance", "price-asc", "price-desc", "rating"].includes(sortParam)) {
@@ -547,6 +548,11 @@
     document.title = product.name + " | Nakupko";
     const category = NK.categoryBySlug(product.category);
     NK.addRecent(product.id);
+    NK.track("product-view", {
+      id: product.id,
+      name: product.name,
+      category: product.category
+    });
 
     const palettes = [
       product.palette,
@@ -778,6 +784,14 @@
       return;
     }
 
+    const stripe = NK.getStripeSettings();
+    const stripeReady = stripe.enabled && NK.isValidStripeLink(stripe.paymentLink);
+    const checkoutTotals = NK.cartTotals();
+    NK.track("checkout", {
+      items: NK.cartCount(),
+      total: checkoutTotals.total
+    });
+
     root.innerHTML =
       '<div class="checkout-layout">' +
       '<form class="checkout-form" id="checkout-form" novalidate>' +
@@ -801,12 +815,25 @@
       choice("delivery", "express", "Hitra dostava", "1–2 delovna dneva", "6,99 €") +
       choice("delivery", "pickup", "Osebni prevzem", "Tržaška cesta 12, Ljubljana", "Brezplačno") +
       "</div></section>" +
-      '<section class="form-section"><div class="form-section__head"><span class="step-number">4</span><div><h2>Plačilo</h2><p>Demo različica ne izvede pravega plačila.</p></div></div>' +
+      '<section class="form-section"><div class="form-section__head"><span class="step-number">4</span><div><h2>Plačilo</h2><p>' +
+      (stripeReady
+        ? "Kartično plačilo lahko zaključite na varni strani Stripe."
+        : "Demo različica ne izvede pravega plačila.") +
+      "</p></div></div>" +
       '<div class="choice-list">' +
       choice("payment", "card", "Kartica", "Visa, Mastercard, Maestro", "Brez doplačila", true) +
       choice("payment", "cod", "Plačilo po povzetju", "Plačate ob prevzemu", "+1,50 €") +
       choice("payment", "bank", "Bančno nakazilo", "Podatke prejmete po e-pošti", "Brez doplačila") +
-      "</div></section>" +
+      (stripeReady
+        ? choice("payment", "stripe", "Stripe", "Varno kartično plačilo prek Stripe", "Brez doplačila")
+        : "") +
+      "</div>" +
+      (stripeReady
+        ? '<p class="checkout-stripe-note">' +
+          ART.icon("lock", 16) +
+          " Po oddaji naročila boste preusmerjeni na varno plačilno stran Stripe.</p>"
+        : "") +
+      "</section>" +
       '<label class="check check--terms"><input type="checkbox" name="terms" id="terms"><span>Strinjam se s <a href="info.html#pogoji" target="_blank" rel="noopener">splošnimi pogoji</a> in <a href="info.html#zasebnost" target="_blank" rel="noopener">politiko zasebnosti</a>.</span></label>' +
       '<p class="field__error" data-error="terms"></p>' +
       '<button class="btn btn--primary btn--lg btn--block" type="submit">' + ART.icon("lock", 18) + " Oddaj naročilo</button>" +
@@ -838,7 +865,8 @@
       const paymentLabels = {
         card: "Kartica",
         cod: "Plačilo po povzetju",
-        bank: "Bančno nakazilo"
+        bank: "Bančno nakazilo",
+        stripe: "Stripe"
       };
       summary.innerHTML =
         '<h2>Vaše naročilo</h2><ul class="checkout-items">' +
@@ -917,7 +945,12 @@
         },
         payment: {
           method: options.payment,
-          label: { card: "Kartica", cod: "Plačilo po povzetju", bank: "Bančno nakazilo" }[options.payment],
+          label: {
+            card: "Kartica",
+            cod: "Plačilo po povzetju",
+            bank: "Bančno nakazilo",
+            stripe: "Stripe"
+          }[options.payment],
           fee: totals.fee
         },
         items: items.map((item) => ({
@@ -939,7 +972,9 @@
         }
       };
       NK.saveOrder(order);
-      window.location.href = "order.html";
+      const stripeUrl =
+        options.payment === "stripe" ? NK.stripeCheckoutUrl(order.id) : "";
+      window.location.href = stripeUrl || "order.html";
     });
 
     form.addEventListener("input", (event) => {
