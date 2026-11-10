@@ -12,7 +12,8 @@
     recent: "nakupko.recent.v1",
     orders: "nakupko.orders.v1",
     lastOrder: "nakupko.last-order.v1",
-    customProducts: "nakupko.custom-products.v1"
+    customProducts: "nakupko.custom-products.v1",
+    hiddenProducts: "nakupko.hidden-products.v1"
   };
 
   const moneyFormatter = new Intl.NumberFormat("sl-SI", {
@@ -86,9 +87,16 @@
   const baseProducts = Array.isArray(NK.products) ? NK.products : [];
   const storedCustom = read(KEYS.customProducts, []);
   const customProducts = (Array.isArray(storedCustom) ? storedCustom : []).filter(isValidCustomProduct);
-  const products = baseProducts.concat(customProducts);
+  const storedHidden = read(KEYS.hiddenProducts, []);
+  const hiddenIds = new Set(
+    (Array.isArray(storedHidden) ? storedHidden : []).filter((id) => typeof id === "string")
+  );
+  let products = baseProducts
+    .filter((product) => !hiddenIds.has(product.id))
+    .concat(customProducts);
   NK.baseProducts = baseProducts;
   NK.customProducts = customProducts;
+  NK.hiddenProducts = baseProducts.filter((product) => hiddenIds.has(product.id));
   NK.products = products;
   const byId = new Map(products.map((product) => [product.id, product]));
 
@@ -295,6 +303,53 @@
 
   function getCustomProducts() {
     return NK.customProducts.slice().sort((a, b) => (b.added || 0) - (a.added || 0));
+  }
+
+  function getHiddenProducts() {
+    return baseProducts.filter((product) => hiddenIds.has(product.id));
+  }
+
+  function persistHidden() {
+    write(KEYS.hiddenProducts, Array.from(hiddenIds));
+  }
+
+  function rebuildCatalog() {
+    products = baseProducts
+      .filter((product) => !hiddenIds.has(product.id))
+      .concat(NK.customProducts);
+    NK.products = products;
+    NK.hiddenProducts = getHiddenProducts();
+
+    byId.clear();
+    products.forEach((product) => byId.set(product.id, product));
+
+    state.cart = state.cart.filter((item) => item && byId.has(item.id));
+    state.wishlist = state.wishlist.filter((id) => byId.has(id));
+    state.recent = state.recent.filter((id) => byId.has(id));
+
+    write(KEYS.cart, state.cart);
+    write(KEYS.wishlist, state.wishlist);
+    write(KEYS.recent, state.recent);
+    updateBadges();
+    renderCartDrawer();
+    document.dispatchEvent(new CustomEvent("nk:products-change"));
+  }
+
+  function hideProduct(id) {
+    const product = baseProducts.find((item) => item.id === id);
+    if (!product || hiddenIds.has(id)) return false;
+    hiddenIds.add(id);
+    persistHidden();
+    rebuildCatalog();
+    return true;
+  }
+
+  function restoreProduct(id) {
+    if (!hiddenIds.has(id)) return false;
+    hiddenIds.delete(id);
+    persistHidden();
+    rebuildCatalog();
+    return true;
   }
 
   function matchesAny(text, list) {
@@ -1143,6 +1198,9 @@
     saveCustomProduct: saveCustomProduct,
     deleteCustomProduct: deleteCustomProduct,
     getCustomProducts: getCustomProducts,
+    getHiddenProducts: getHiddenProducts,
+    hideProduct: hideProduct,
+    restoreProduct: restoreProduct,
     searchProducts: searchProducts,
     stars: stars,
     productCard: productCard,

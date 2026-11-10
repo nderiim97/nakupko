@@ -48,7 +48,7 @@ Nato obiščite <http://127.0.0.1:8765/index.html>.
 
 Kodo vnesite v košarici. Uporabi se takoj in jo lahko kadarkoli odstranite.
 
-## Skrbništvo (dodajanje izdelkov)
+## Skrbništvo (urejanje izdelkov)
 
 Odprite `admin.html` (povezava je tudi v nogi strani) in se prijavite z geslom:
 
@@ -60,11 +60,13 @@ Po prijavi lahko:
 
 - dodate izdelek v izbrano rubriko in določite ceno (ter neobvezno staro ceno),
 - izberete blagovno znamko, barvo in ilustracijo (predogled se posodablja sproti),
-- urejate in brišete svoje izdelke.
+- urejate in trajno izbrišete svoje izdelke,
+- odstranite katerikoli osnovni izdelek iz trgovine in ga pozneje vrnete,
+- iščete po vseh izdelkih ter vidite, kateri so vaši in kateri osnovni.
 
-Novi izdelki se takoj prikažejo na domači strani, v izbrani rubriki, iskanju in na
-strani izdelka. Shranjeni so v `localStorage` pod ključem `nakupko.custom-products.v1`,
-zato jih vidi samo ta brskalnik in samo na tej napravi.
+Odstranjeni osnovni izdelki se shranijo pod ključem `nakupko.hidden-products.v1`,
+novi izdelki pa pod `nakupko.custom-products.v1`. Oboje ostane samo v `localStorage`
+tega brskalnika, zato spremembe vidite le na tej napravi.
 
 > **Varnost:** prijava je zgolj demo. Geslo je zapisano v javni datoteki
 > `assets/js/admin.js`, podatki pa ostanejo v brskalniku. To ni prava zaščita in ni

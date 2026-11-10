@@ -120,14 +120,53 @@
   }
 
   /* -------------------------------------------------------------- panel */
+  function adminCatalog() {
+    const custom = NK.getCustomProducts();
+    const customIds = new Set(custom.map((product) => product.id));
+    return custom.concat(NK.products.filter((product) => !customIds.has(product.id)));
+  }
+
+  function adminItem(product, hidden) {
+    const category = NK.categoryBySlug(product.category);
+    const id = NK.escapeHtml(product.id);
+    const thumb =
+      '<span class="admin-thumb">' + ART.product(product.art, product.palette, product.name) + "</span>";
+    const open = hidden
+      ? thumb
+      : '<a class="admin-thumb" href="' + NK.productUrl(product) + '">' +
+        ART.product(product.art, product.palette, product.name) +
+        "</a>";
+    const actions = hidden
+      ? '<button class="btn btn--soft" type="button" data-restore="' + id + '">Vrni v trgovino</button>'
+      : '<a class="btn btn--soft" href="' + NK.productUrl(product) + '">Poglej</a>' +
+        (product.custom
+          ? '<button class="btn btn--soft" type="button" data-edit="' + id + '">Uredi</button>'
+          : "") +
+        '<button class="btn btn--ghost admin-danger" type="button" data-delete="' + id + '">' +
+        (product.custom ? "Izbriši" : "Odstrani") +
+        "</button>";
+
+    return (
+      '<article class="admin-item' + (hidden ? " admin-item--hidden" : "") + '">' +
+      open +
+      '<div class="admin-item__body">' +
+      "<strong>" + NK.escapeHtml(product.name) + "</strong>" +
+      "<span>" + NK.escapeHtml(category ? category.name : product.category) + " · " + NK.money(product.price) + "</span>" +
+      '<span class="admin-sku">' + NK.escapeHtml(product.sku || "") + "</span>" +
+      '<span class="admin-type">' + (hidden ? "Odstranjen" : product.custom ? "Vaš izdelek" : "Osnovna ponudba") + "</span>" +
+      "</div>" +
+      '<div class="admin-item__actions">' + actions + "</div></article>"
+    );
+  }
+
   function renderPanel() {
     editingId = "";
-    const items = NK.getCustomProducts();
+    const items = adminCatalog();
     const defaultCategory = NK.categories[0] ? NK.categories[0].slug : "";
 
     root.innerHTML =
       '<div class="admin-top">' +
-      '<p class="admin-note">Novi izdelki so shranjeni v <code>localStorage</code> tega brskalnika. Obiskovalci na drugih napravah jih ne vidijo.</p>' +
+      '<p class="admin-note">Osnovne izdelke lahko odstranite in jih pozneje vrnete, svoje pa trajno izbrišete. Novi izdelki so shranjeni v <code>localStorage</code> tega brskalnika.</p>' +
       '<div class="admin-top__actions">' +
       '<a class="btn btn--soft" href="index.html">Odpri trgovino</a>' +
       '<button class="btn btn--ghost" type="button" id="admin-logout">Odjava</button>' +
@@ -171,14 +210,19 @@
       '<button class="btn btn--ghost" type="button" id="admin-cancel" hidden>Prekliči urejanje</button>' +
       "</div></form></section>" +
       '<section class="admin-card">' +
-      '<div class="admin-card__head"><div><h2>Vaši izdelki</h2><p>Urejanje in brisanje je takoj vidno v trgovini.</p></div>' +
+      '<div class="admin-card__head"><div><h2>Izdelki v trgovini</h2><p>Odstranite ali izbrišite izdelke in dodajte nove.</p></div>' +
       '<span class="admin-count" id="admin-count">' +
       items.length +
       "</span></div>" +
-      '<div class="admin-list" id="admin-list"></div>' +
+      '<div class="admin-tools"><label class="sr-only" for="admin-search">Iskanje izdelkov</label>' +
+      '<input id="admin-search" type="search" placeholder="Iskanje po nazivu, rubriki ali šifri" autocomplete="off"></div>' +
+      '<div class="admin-list admin-list--scroll" id="admin-list"></div>' +
+      '<div id="admin-hidden-wrap"></div>' +
       "</section></div>";
 
     renderList();
+    renderHidden();
+    bindSearch();
     bindForm();
 
     const logout = $("#admin-logout");
@@ -190,43 +234,68 @@
     }
   }
 
-  function renderList() {
-    const host = $("#admin-list");
-    if (!host) return;
-    const items = NK.getCustomProducts();
-
-    if (!items.length) {
-      host.innerHTML = '<div class="admin-empty">Še ni dodanih izdelkov. Izpolnite obrazec in dodajte prvega.</div>';
-      return;
-    }
-
-    host.innerHTML = items
-      .map((product) => {
-        const category = NK.categoryBySlug(product.category);
-        return (
-          '<article class="admin-item">' +
-          '<a class="admin-thumb" href="' + NK.productUrl(product) + '">' +
-          ART.product(product.art, product.palette, product.name) +
-          "</a>" +
-          '<div class="admin-item__body">' +
-          "<strong>" + NK.escapeHtml(product.name) + "</strong>" +
-          "<span>" + NK.escapeHtml(category ? category.name : product.category) + " · " + NK.money(product.price) + "</span>" +
-          '<span class="admin-sku">' + NK.escapeHtml(product.sku || "") + "</span>" +
-          "</div>" +
-          '<div class="admin-item__actions">' +
-          '<a class="btn btn--soft" href="' + NK.productUrl(product) + '">Poglej</a>' +
-          '<button class="btn btn--soft" type="button" data-edit="' + NK.escapeHtml(product.id) + '">Uredi</button>' +
-          '<button class="btn btn--ghost admin-danger" type="button" data-delete="' + NK.escapeHtml(product.id) + '">Izbriši</button>' +
-          "</div></article>"
-        );
-      })
-      .join("");
-
+  function bindListActions(host) {
     host.querySelectorAll("[data-edit]").forEach((button) => {
       button.addEventListener("click", () => startEdit(button.getAttribute("data-edit")));
     });
     host.querySelectorAll("[data-delete]").forEach((button) => {
       button.addEventListener("click", () => removeProduct(button.getAttribute("data-delete")));
+    });
+  }
+
+  function renderList() {
+    const host = $("#admin-list");
+    if (!host) return;
+    const items = adminCatalog();
+
+    if (!items.length) {
+      host.innerHTML =
+        '<div class="admin-empty">V trgovini ni izdelkov. Vrnite odstranjene izdelke spodaj ali dodajte novega.</div>';
+      return;
+    }
+
+    host.innerHTML = items.map((product) => adminItem(product, false)).join("");
+    bindListActions(host);
+  }
+
+  function renderHidden() {
+    const host = $("#admin-hidden-wrap");
+    if (!host) return;
+    const items = NK.getHiddenProducts();
+
+    if (!items.length) {
+      host.innerHTML = "";
+      return;
+    }
+
+    host.innerHTML =
+      '<div class="admin-hidden">' +
+      '<div class="admin-card__head"><div><h3>Odstranjeni izdelki</h3><p>Vrnite jih v trgovino, ko jih spet želite prikazati.</p></div>' +
+      '<span class="admin-count">' + items.length + "</span></div>" +
+      '<div class="admin-list">' + items.map((product) => adminItem(product, true)).join("") + "</div></div>";
+
+    host.querySelectorAll("[data-restore]").forEach((button) => {
+      button.addEventListener("click", () => restoreHiddenProduct(button.getAttribute("data-restore")));
+    });
+  }
+
+  function refreshLists() {
+    renderList();
+    renderHidden();
+    const count = $("#admin-count");
+    if (count) count.textContent = adminCatalog().length;
+  }
+
+  function bindSearch() {
+    const input = $("#admin-search");
+    if (!input) return;
+    input.addEventListener("input", () => {
+      const query = NK.norm(input.value);
+      const host = $("#admin-list");
+      if (!host) return;
+      host.querySelectorAll(".admin-item").forEach((item) => {
+        item.hidden = Boolean(query) && !NK.norm(item.textContent).includes(query);
+      });
     });
   }
 
@@ -330,20 +399,37 @@
   }
 
   function removeProduct(id) {
-    const product = NK.getCustomProducts().find((item) => item.id === id);
+    const product =
+      NK.getProduct(id) || NK.getHiddenProducts().find((item) => item.id === id);
     if (!product) return;
-    if (!window.confirm('Izbrišem izdelek "' + product.name + '"?')) return;
 
-    if (NK.deleteCustomProduct(id)) {
-      NK.toast("Izdelek je izbrisan.", "success");
-      if (editingId === id) {
-        renderPanel();
-      } else {
-        renderList();
-        const count = $("#admin-count");
-        if (count) count.textContent = NK.getCustomProducts().length;
-      }
+    const isCustom = product.custom === true;
+    const message = isCustom
+      ? 'Izbrišem izdelek "' + product.name + '"? Tega dejanja ni mogoče razveljaviti.'
+      : 'Odstranim izdelek "' + product.name + '" iz trgovine? Pozneje ga lahko vrnete.';
+    if (!window.confirm(message)) return;
+
+    const done = isCustom ? NK.deleteCustomProduct(id) : NK.hideProduct(id);
+    if (!done) return;
+
+    NK.toast(
+      isCustom
+        ? "Izdelek je izbrisan."
+        : "Izdelek je odstranjen iz trgovine. Vrnete ga lahko spodaj.",
+      "success"
+    );
+
+    if (editingId === id) {
+      renderPanel();
+      return;
     }
+    refreshLists();
+  }
+
+  function restoreHiddenProduct(id) {
+    if (!NK.restoreProduct(id)) return;
+    NK.toast("Izdelek je vrnjen v trgovino.", "success");
+    refreshLists();
   }
 
   function boot() {
