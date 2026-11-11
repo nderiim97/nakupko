@@ -26,6 +26,19 @@ def _bool(value: str | None, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _database_url() -> str:
+    """Return a SQLAlchemy URL that uses the installed psycopg 3 driver."""
+    url = os.getenv(
+        "DATABASE_URL",
+        "sqlite:///" + (DATA_DIR / "nakupko.db").as_posix(),
+    )
+    if url.startswith("postgres://"):
+        url = "postgresql+psycopg://" + url[len("postgres://") :]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://") :]
+    return url
+
+
 class Settings:
     app_name: str = "Nakupko"
     environment: str = os.getenv("APP_ENV", "development")
@@ -35,10 +48,7 @@ class Settings:
     session_days: int = int(os.getenv("SESSION_DAYS", "7"))
 
     # Database -------------------------------------------------------------
-    database_url: str = os.getenv(
-        "DATABASE_URL",
-        "sqlite:///" + (DATA_DIR / "nakupko.db").as_posix(),
-    )
+    database_url: str = _database_url()
 
     # Admin bootstrap ------------------------------------------------------
     admin_email: str = os.getenv("ADMIN_EMAIL", "admin@nakupko.local")

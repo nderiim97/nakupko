@@ -43,6 +43,19 @@ def test_health(client):
     assert response.json()["ok"] is True
 
 
+def test_database_url_uses_psycopg(monkeypatch):
+    from server.config import _database_url
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@host:5432/db")
+    assert _database_url() == "postgresql+psycopg://u:p@host:5432/db"
+
+    monkeypatch.setenv("DATABASE_URL", "postgres://u:p@host:5432/db")
+    assert _database_url() == "postgresql+psycopg://u:p@host:5432/db"
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host/db")
+    assert _database_url() == "postgresql+psycopg://u:p@host/db"
+
+
 def test_bootstrap_catalog(client):
     data = client.get("/api/bootstrap").json()
     assert data["mode"] == "live"

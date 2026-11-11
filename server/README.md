@@ -128,7 +128,7 @@ For Gmail use an app password, for most providers port 587 with STARTTLS.
 | `APP_ENV` | `development` | Free-form label |
 | `SECRET_KEY` | `dev-only-change-me` | **Required in production**; signs admin cookies |
 | `SESSION_DAYS` | `7` | Admin session lifetime |
-| `DATABASE_URL` | `sqlite:///server/nakupko.db` | Use `postgresql+psycopg://...` in production |
+| `DATABASE_URL` | `sqlite:///server/nakupko.db` | `postgresql://...` is normalized to the installed psycopg 3 driver |
 | `ADMIN_EMAIL` | `admin@nakupko.local` | Bootstrap admin |
 | `ADMIN_PASSWORD` | `12345678` | **Change in production** |
 | `PUBLIC_BASE_URL` | `http://127.0.0.1:8000` | Used for Stripe return URLs and secure cookies |
