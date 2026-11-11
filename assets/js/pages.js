@@ -785,7 +785,9 @@
     }
 
     const stripe = NK.getStripeSettings();
-    const stripeReady = stripe.enabled && NK.isValidStripeLink(stripe.paymentLink);
+    const stripeReady = NK.live
+      ? Boolean(NK.store && NK.store.stripeEnabled)
+      : stripe.enabled && NK.isValidStripeLink(stripe.paymentLink);
     const checkoutTotals = NK.cartTotals();
     NK.track("checkout", {
       items: NK.cartCount(),
@@ -818,11 +820,17 @@
       '<section class="form-section"><div class="form-section__head"><span class="step-number">4</span><div><h2>Plačilo</h2><p>' +
       (stripeReady
         ? "Kartično plačilo lahko zaključite na varni strani Stripe."
-        : "Demo različica ne izvede pravega plačila.") +
+        : NK.live
+          ? "Kartično plačilo trenutno ni na voljo. Izberite plačilo po povzetju ali bančno nakazilo."
+          : "Demo različica ne izvede pravega plačila.") +
       "</p></div></div>" +
       '<div class="choice-list">' +
-      choice("payment", "card", "Kartica", "Visa, Mastercard, Maestro", "Brez doplačila", true) +
-      choice("payment", "cod", "Plačilo po povzetju", "Plačate ob prevzemu", "+1,50 €") +
+      (stripeReady
+        ? choice("payment", "card", "Kartica", "Visa, Mastercard, Maestro", "Brez doplačila", true)
+        : NK.live
+          ? ""
+          : choice("payment", "card", "Kartica", "Visa, Mastercard, Maestro", "Brez doplačila", true)) +
+      choice("payment", "cod", "Plačilo po povzetju", "Plačate ob prevzemu", "+1,50 €", NK.live && !stripeReady) +
       choice("payment", "bank", "Bančno nakazilo", "Podatke prejmete po e-pošti", "Brez doplačila") +
       (stripeReady
         ? choice("payment", "stripe", "Stripe", "Varno kartično plačilo prek Stripe", "Brez doplačila")
@@ -837,7 +845,11 @@
       '<label class="check check--terms"><input type="checkbox" name="terms" id="terms"><span>Strinjam se s <a href="info.html#pogoji" target="_blank" rel="noopener">splošnimi pogoji</a> in <a href="info.html#zasebnost" target="_blank" rel="noopener">politiko zasebnosti</a>.</span></label>' +
       '<p class="field__error" data-error="terms"></p>' +
       '<button class="btn btn--primary btn--lg btn--block" type="submit">' + ART.icon("lock", 18) + " Oddaj naročilo</button>" +
-      '<p class="checkout-demo">Demo: obrazec ne pošilja podatkov in ne izvede plačila.</p>' +
+      '<p class="checkout-demo">' +
+      (NK.live
+        ? "Podatki se varno pošljejo strežniku trgovine in shranijo v bazo naročil."
+        : "Demo: obrazec ne pošilja podatkov in ne izvede plačila.") +
+      "</p>" +
       "</form>" +
       '<aside class="checkout-aside"><div class="summary-card" id="checkout-summary"></div></aside>' +
       "</div>";
@@ -882,7 +894,7 @@
         '<div class="summary-row"><span>' + deliveryLabels[options.delivery] + "</span><strong>" + (totals.shipping === 0 ? "Brezplačno" : NK.money(totals.shipping)) + "</strong></div>" +
         (totals.fee ? '<div class="summary-row"><span>' + paymentLabels[options.payment] + "</span><strong>" + NK.money(totals.fee) + "</strong></div>" : "") +
         '<div class="summary-total"><span>Skupaj</span><strong>' + NK.money(totals.total) + "</strong></div>" +
-        '<p class="summary-note">' + ART.icon("shield", 15) + " Podatki ostanejo v vašem brskalniku.</p>";
+        '<p class="summary-note">' + ART.icon("shield", 15) + (NK.live ? " Podatki so poslani varno in ostanejo zaupni." : " Podatki ostanejo v vašem brskalniku.") + "</p>";
     }
     form.addEventListener("change", renderSummary);
     renderSummary();
@@ -920,6 +932,10 @@
       const options = currentOptions();
       const totals = NK.cartTotals(options);
       const items = NK.cartItems();
+      if (NK.live) {
+        submitLiveOrder(form, options, items, totals, data);
+        return;
+      }
       const now = new Date();
       const stamp =
         now.getFullYear().toString() +
@@ -990,6 +1006,76 @@
     });
   }
 
+  function submitLiveOrder(form, options, items, totals, data) {
+    const submit = form.querySelector('button[type="submit"]');
+    const label = submit ? submit.textContent : "";
+    if (submit) {
+      submit.disabled = true;
+      submit.textContent = "Pošiljam naročilo …";
+    }
+    const customer = {
+      email: String(data.get("email") || "").trim(),
+      name: String(data.get("name") || "").trim(),
+      phone: String(data.get("phone") || "").trim(),
+      address: String(data.get("address") || "").trim(),
+      postal: String(data.get("postal") || "").trim(),
+      city: String(data.get("city") || "").trim(),
+      note: String(data.get("note") || "").trim()
+    };
+
+    fetch(NK.api + "/orders", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: items.map((item) => ({
+          id: item.id,
+          qty: item.qty,
+          color: item.color || ""
+        })),
+        customer: customer,
+        delivery: options.delivery,
+        payment: options.payment,
+        coupon: totals.coupon ? totals.coupon.code : ""
+      })
+    })
+      .then((response) =>
+        response
+          .json()
+          .catch(() => ({}))
+          .then((body) => {
+            if (!response.ok) {
+              throw new Error(body.detail || "Naročila ni bilo mogoče oddati.");
+            }
+            return body;
+          })
+      )
+      .then((body) => {
+        NK.clearCart();
+        try {
+          window.localStorage.setItem("nakupko.last-order-token.v1", body.accessToken);
+        } catch (error) {
+          /* Storage may be blocked; the URL still carries the token. */
+        }
+        if (body.checkoutUrl) {
+          window.location.href = body.checkoutUrl;
+          return;
+        }
+        window.location.href =
+          "order.html?id=" +
+          encodeURIComponent(body.order.id) +
+          "&token=" +
+          encodeURIComponent(body.accessToken);
+      })
+      .catch((error) => {
+        NK.toast(error.message || "Naročila ni bilo mogoče oddati.", "info");
+        if (submit) {
+          submit.disabled = false;
+          submit.textContent = label;
+        }
+      });
+  }
+
   function field(name, label, type, placeholder, autocomplete, message, extra) {
     return (
       '<div class="field"><label for="' + name + '">' + esc(label) + "</label>" +
@@ -1025,25 +1111,120 @@
   }
 
   /* ----------------------------------------------------------------- order */
+  function lastOrderToken() {
+    try {
+      return window.localStorage.getItem("nakupko.last-order-token.v1") || "";
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function orderStatusLabel(status) {
+    return {
+      pending_payment: "Čaka plačilo",
+      new: "Novo",
+      approved: "Odobreno",
+      shipped: "Poslano",
+      cancelled: "Preklicano"
+    }[status] || "Novo";
+  }
+
   function initOrder() {
     const root = $("#order-root");
     if (!root) return;
+
+    if (NK.live) {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get("id");
+      const token = params.get("token") || lastOrderToken();
+      if (!id || !token) {
+        root.innerHTML = emptyState(
+          "Naročilo ni najdeno",
+          "Povezava do naročila manjka ali ni več veljavna.",
+          "category.html",
+          "Začni nakupovati"
+        );
+        return;
+      }
+      root.innerHTML = '<p class="muted">Nalagam vaše naročilo …</p>';
+      fetch(
+        NK.api +
+          "/orders/" +
+          encodeURIComponent(id) +
+          "?token=" +
+          encodeURIComponent(token),
+        { credentials: "same-origin" }
+      )
+        .then((response) => {
+          if (!response.ok) throw new Error("not-found");
+          return response.json();
+        })
+        .then((data) =>
+          renderOrderPage(data.order, { live: true, token: token })
+        )
+        .catch(() => {
+          root.innerHTML = emptyState(
+            "Naročilo ni najdeno",
+            "Povezava je potekla ali naročilo ne obstaja.",
+            "category.html",
+            "Začni nakupovati"
+          );
+        });
+      return;
+    }
+
     const order = NK.getLastOrder();
     if (!order) {
       root.innerHTML = emptyState("Naročilo ni najdeno", "V tem brskalniku še ni shranjenega naročila.", "category.html", "Začni nakupovati");
       return;
     }
-    document.title = "Hvala za naročilo | Nakupko";
+    renderOrderPage(order, { live: false });
+  }
+
+  function renderOrderPage(order, options) {
+    const root = $("#order-root");
+    if (!root) return;
+    const opts = options || {};
     const totals = order.totals || {};
+    const created = new Date(order.createdAt);
+    const estimated = order.estimated
+      ? new Date(order.estimated)
+      : new Date(created.getTime() + 3 * 86400000);
+    const status = order.status || "new";
+    const pendingPayment = opts.live && status === "pending_payment";
+    const isBank =
+      opts.live &&
+      order.payment &&
+      order.payment.method === "bank" &&
+      order.paymentStatus !== "paid";
+    const store = NK.store || {};
+
+    let intro;
+    if (!opts.live) {
+      intro = "Vaše naročilo je zabeleženo. V demo trgovini e-poštno sporočilo ni poslano, podatki pa ostanejo v vašem brskalniku.";
+    } else if (pendingPayment) {
+      intro = "Naročilo je shranjeno, vendar plačilo še ni zaključeno. Lahko ga dokončate zdaj.";
+    } else if (order.paymentStatus === "paid") {
+      intro = "Plačilo je potrjeno. Potrditev naročila smo poslali na " + esc(order.customer.email) + ".";
+    } else if (order.payment && order.payment.method === "cod") {
+      intro = "Naročilo je prejeto. Znesek plačate ob prevzemu. Potrditev smo poslali na " + esc(order.customer.email) + ".";
+    } else if (isBank) {
+      intro = "Naročilo je prejeto. Znesek poravnate z bančnim nakazilom. Potrditev smo poslali na " + esc(order.customer.email) + ".";
+    } else {
+      intro = "Naročilo je prejeto. Podatke smo shranili v trgovini in jih bomo obdelali v najkrajšem času.";
+    }
+
+    document.title = "Hvala za naročilo | Nakupko";
     root.innerHTML =
       '<div class="order-success">' +
       '<span class="order-success__icon">' + ART.icon("check", 38) + "</span>" +
       '<p class="eyebrow">Naročilo ' + esc(order.id) + "</p>" +
       "<h1>Hvala za naročilo!</h1>" +
-      "<p>Vaše naročilo je zabeleženo. V demo trgovini e-poštno sporočilo ni poslano, podatki pa ostanejo v vašem brskalniku.</p>" +
+      "<p>" + intro + "</p>" +
       '<div class="order-meta">' +
       '<div><span>Datum</span><strong>' + NK.longDate(order.createdAt) + "</strong></div>" +
-      '<div><span>Predvidena dostava</span><strong>' + NK.longDate(order.estimated) + "</strong></div>" +
+      '<div><span>Predvidena dostava</span><strong>' + NK.longDate(estimated) + "</strong></div>" +
+      '<div><span>Status</span><strong>' + esc(orderStatusLabel(status)) + "</strong></div>" +
       '<div><span>Plačilo</span><strong>' + esc(order.payment ? order.payment.label : "Kartica") + "</strong></div>" +
       '<div><span>Dostava</span><strong>' + esc(order.delivery ? order.delivery.label : "Standardna dostava") + "</strong></div>" +
       "</div>" +
@@ -1061,24 +1242,115 @@
       (totals.fee ? '<div class="summary-row"><span>Doplačilo za plačilo</span><strong>' + NK.money(totals.fee) + "</strong></div>" : "") +
       '<div class="summary-total"><span>Skupaj</span><strong>' + NK.money(totals.total) + "</strong></div></div>" +
       '<div class="order-address"><h2>Dostava na</h2><p>' + esc(order.customer.name) + "<br>" + esc(order.customer.address) + "<br>" + esc(order.customer.postal) + " " + esc(order.customer.city) + "<br>" + esc(order.customer.email) + "</p></div>" +
-      '<div class="order-actions"><button class="btn btn--soft" type="button" id="print-order">' + ART.icon("arrow-right", 17) + " Natisni povzetek</button><a class=\"btn btn--primary\" href=\"category.html\">Nadaljuj z nakupovanjem</a></div>" +
+      (isBank
+        ? '<div class="order-bank"><h2>Podatki za nakazilo</h2>' +
+          (store.storeIban
+            ? "<p>IBAN: <strong>" + esc(store.storeIban) + "</strong><br>Sklic: <strong>" + esc(order.id) + "</strong><br>Znesek: <strong>" + NK.money(totals.total) + "</strong><br>Prejemnik: <strong>" + esc(store.storeName || "Nakupko") + "</strong></p>"
+            : "<p>Podatke za bančno nakazilo vam pošljemo po e-pošti.</p>") +
+          "</div>"
+        : "") +
+      '<div class="order-actions">' +
+      (pendingPayment
+        ? '<button class="btn btn--primary" type="button" id="retry-payment">' + ART.icon("lock", 17) + " Dokončaj plačilo</button>"
+        : "") +
+      '<button class="btn btn--soft" type="button" id="print-order">' + ART.icon("arrow-right", 17) + " Natisni povzetek</button><a class=\"btn btn--primary\" href=\"category.html\">Nadaljuj z nakupovanjem</a></div>" +
       "</div>";
+
     const print = $("#print-order");
     if (print) print.addEventListener("click", () => window.print());
+
+    const retry = $("#retry-payment");
+    if (retry && opts.token) {
+      retry.addEventListener("click", () => {
+        retry.disabled = true;
+        fetch(
+          NK.api +
+            "/orders/" +
+            encodeURIComponent(order.id) +
+            "/stripe?token=" +
+            encodeURIComponent(opts.token),
+          { method: "POST", credentials: "same-origin" }
+        )
+          .then((response) =>
+            response
+              .json()
+              .catch(() => ({}))
+              .then((body) => {
+                if (!response.ok) {
+                  throw new Error(body.detail || "Plačila ni mogoče začeti.");
+                }
+                return body;
+              })
+          )
+          .then((body) => {
+            if (body.checkoutUrl) window.location.href = body.checkoutUrl;
+          })
+          .catch((error) => {
+            NK.toast(error.message, "info");
+            retry.disabled = false;
+          });
+      });
+    }
+  }
+
+  /* ------------------------------------------------------------------ info */
+  function initInfo() {
+    if (!NK.live) return;
+    const store = NK.store || {};
+    const money = (value) =>
+      Number.isFinite(Number(value)) ? NK.money(Number(value)) : "";
+
+    $$("[data-store-name]").forEach((el) => {
+      el.textContent = store.storeName || "Nakupko";
+    });
+
+    $$("[data-store-email]").forEach((el) => {
+      if (!store.storeEmail) return;
+      el.textContent = store.storeEmail;
+      if (el.tagName === "A") el.setAttribute("href", "mailto:" + store.storeEmail);
+    });
+
+    $$("[data-store-phone]").forEach((el) => {
+      if (!store.storePhone) return;
+      el.textContent = store.storePhone;
+      if (el.tagName === "A") {
+        el.setAttribute("href", "tel:" + store.storePhone.replace(/[^+\d]/g, ""));
+      }
+    });
+
+    $$("[data-store-address]").forEach((el) => {
+      if (store.storeAddress) el.textContent = store.storeAddress;
+    });
+
+    $$("[data-store-vat]").forEach((el) => {
+      if (store.storeVat) el.textContent = store.storeVat;
+    });
+
+    $$("[data-store-iban]").forEach((el) => {
+      el.textContent = store.storeIban || "—";
+    });
+
+    $$("[data-store-price]").forEach((el) => {
+      const value = money(store[el.getAttribute("data-store-price")]);
+      if (value) el.textContent = value;
+    });
   }
 
   /* ------------------------------------------------------------------ boot */
   function boot() {
-    NK.initGlobal();
-    const page = document.body.getAttribute("data-page");
-    if (page === "home") initHome();
-    else if (page === "category") initCategory();
-    else if (page === "search") initSearch();
-    else if (page === "product") initProduct();
-    else if (page === "cart") initCart();
-    else if (page === "checkout") initCheckout();
-    else if (page === "wishlist") initWishlist();
-    else if (page === "order") initOrder();
+    Promise.resolve(NK.ready).then(() => {
+      NK.initGlobal();
+      const page = document.body.getAttribute("data-page");
+      if (page === "home") initHome();
+      else if (page === "category") initCategory();
+      else if (page === "search") initSearch();
+      else if (page === "product") initProduct();
+      else if (page === "cart") initCart();
+      else if (page === "checkout") initCheckout();
+      else if (page === "wishlist") initWishlist();
+      else if (page === "order") initOrder();
+      else if (page === "info") initInfo();
+    });
   }
 
   if (document.readyState === "loading") {

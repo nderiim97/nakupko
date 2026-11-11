@@ -9,8 +9,15 @@
 
   const PASSWORD = "12345678";
   const SESSION_KEY = "nakupko.admin.session";
+  const LIVE_MODE = window.NK_MODE === "live";
+  const API = window.NK_API || "/api";
   const root = $("#admin-root");
   if (!root) return;
+
+  let liveProducts = [];
+  let liveOrders = [];
+  let liveEmail = "";
+  let liveEditing = null;
 
   const ART_OPTIONS = [
     ["generic", "Splošno"],
@@ -61,9 +68,11 @@
     order: "Naročilo"
   };
   const ORDER_STATUS_LABELS = {
+    pending_payment: "Čaka plačilo",
     new: "Novo",
     approved: "Odobreno",
-    shipped: "Poslano"
+    shipped: "Poslano",
+    cancelled: "Preklicano"
   };
 
   function isLoggedIn() {
@@ -81,6 +90,59 @@
     } catch (error) {
       /* Storage may be blocked; the current view still works. */
     }
+  }
+
+  /* ----------------------------------------------------------- live API */
+  function apiRequest(path, options) {
+    const opts = options || {};
+    const config = {
+      method: opts.method || "GET",
+      credentials: "same-origin",
+      headers: {}
+    };
+    if (opts.body !== undefined) {
+      config.headers["Content-Type"] = "application/json";
+      config.body = JSON.stringify(opts.body);
+    }
+    return fetch(API + path, config).then((response) =>
+      response
+        .json()
+        .catch(() => ({}))
+        .then((body) => {
+          if (!response.ok) {
+            const message =
+              (body && (body.detail || body.message)) ||
+              "Zahteva ni uspela (" + response.status + ").";
+            throw new Error(typeof message === "string" ? message : "Zahteva ni uspela.");
+          }
+          return body;
+        })
+    );
+  }
+
+  function allOrders() {
+    return LIVE_MODE ? liveOrders : NK.getOrders();
+  }
+
+  function loadLiveData() {
+    return Promise.all([
+      apiRequest("/admin/products"),
+      apiRequest("/admin/orders")
+    ]).then(([productsBody, ordersBody]) => {
+      liveProducts = productsBody.products || [];
+      liveOrders = ordersBody.orders || [];
+      NK.products = liveProducts;
+      NK.baseProducts = liveProducts;
+      NK.liveOrders = liveOrders;
+    });
+  }
+
+  function refreshLiveData() {
+    return loadLiveData().then(() => {
+      refreshLists();
+      renderOrders();
+      renderDashboard();
+    });
   }
 
   function option(value, label, selected) {
@@ -106,6 +168,67 @@
 
   /* -------------------------------------------------------------- login */
   function renderLogin(message) {
+    if (LIVE_MODE) {
+      root.innerHTML =
+        '<div class="admin-login"><div class="admin-card">' +
+        '<p class="eyebrow">Skrbništvo</p>' +
+        "<h2>Prijava</h2>" +
+        '<p class="admin-note">Prijava je zaščitena na strežniku trgovine. Seja poteče po nekaj dneh ali ob odjavi.</p>' +
+        '<form id="admin-login-form" class="admin-login__form" novalidate>' +
+        '<div class="field"><label for="admin-email">E-pošta</label>' +
+        '<input id="admin-email" name="email" type="email" autocomplete="username" required></div>' +
+        '<div class="field"><label for="admin-password">Geslo</label>' +
+        '<input id="admin-password" name="password" type="password" autocomplete="current-password" required></div>' +
+        '<p class="admin-error' + (message ? " is-visible" : "") + '" id="admin-login-error" role="alert">' +
+        NK.escapeHtml(message || "") +
+        "</p>" +
+        '<button class="btn btn--primary btn--block" type="submit">Prijava</button>' +
+        "</form>" +
+        '<p class="admin-hint">Dostop je omejen na pooblaščene skrbnike trgovine.</p>' +
+        "</div></div>";
+
+      const form = $("#admin-login-form");
+      const email = $("#admin-email");
+      const password = $("#admin-password");
+      if (email) email.focus();
+
+      if (form) {
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          const error = $("#admin-login-error");
+          const button = form.querySelector('button[type="submit"]');
+          if (error) error.classList.remove("is-visible");
+          if (button) button.disabled = true;
+          apiRequest("/admin/login", {
+            method: "POST",
+            body: {
+              email: email ? email.value.trim() : "",
+              password: password ? password.value : ""
+            }
+          })
+            .then((body) => {
+              liveEmail = body.email || "";
+              return loadLiveData();
+            })
+            .then(() => renderPanel())
+            .catch((err) => {
+              if (error) {
+                error.textContent = err.message || "Prijava ni uspela.";
+                error.classList.add("is-visible");
+              }
+              if (password) {
+                password.value = "";
+                password.focus();
+              }
+            })
+            .finally(() => {
+              if (button) button.disabled = false;
+            });
+        });
+      }
+      return;
+    }
+
     root.innerHTML =
       '<div class="admin-login"><div class="admin-card">' +
       '<p class="eyebrow">Skrbništvo</p>' +
@@ -150,6 +273,9 @@
 
   /* -------------------------------------------------------------- panel */
   function adminCatalog() {
+    if (LIVE_MODE) {
+      return liveProducts.filter((product) => product.active !== false);
+    }
     const custom = NK.getCustomProducts();
     const customIds = new Set(custom.map((product) => product.id));
     return custom.concat(NK.products.filter((product) => !customIds.has(product.id)));
@@ -158,6 +284,7 @@
   function adminItem(product, hidden) {
     const category = NK.categoryBySlug(product.category);
     const id = NK.escapeHtml(product.id);
+    const editable = LIVE_MODE || product.custom === true;
     const thumb =
       '<span class="admin-thumb">' + ART.product(product.art, product.palette, product.name) + "</span>";
     const open = hidden
@@ -165,14 +292,19 @@
       : '<a class="admin-thumb" href="' + NK.productUrl(product) + '">' +
         ART.product(product.art, product.palette, product.name) +
         "</a>";
+    const stock = LIVE_MODE
+      ? '<span class="admin-sku">' +
+        (Number(product.stockQty) > 0 ? "Zaloga: " + Number(product.stockQty) : "Ni zaloge") +
+        "</span>"
+      : "";
     const actions = hidden
       ? '<button class="btn btn--soft" type="button" data-restore="' + id + '">Vrni v trgovino</button>'
       : '<a class="btn btn--soft" href="' + NK.productUrl(product) + '">Poglej</a>' +
-        (product.custom
+        (editable
           ? '<button class="btn btn--soft" type="button" data-edit="' + id + '">Uredi</button>'
           : "") +
         '<button class="btn btn--ghost admin-danger" type="button" data-delete="' + id + '">' +
-        (product.custom ? "Izbriši" : "Odstrani") +
+        "Odstrani" +
         "</button>";
 
     return (
@@ -182,7 +314,8 @@
       "<strong>" + NK.escapeHtml(product.name) + "</strong>" +
       "<span>" + NK.escapeHtml(category ? category.name : product.category) + " · " + NK.money(product.price) + "</span>" +
       '<span class="admin-sku">' + NK.escapeHtml(product.sku || "") + "</span>" +
-      '<span class="admin-type">' + (hidden ? "Odstranjen" : product.custom ? "Vaš izdelek" : "Osnovna ponudba") + "</span>" +
+      stock +
+      '<span class="admin-type">' + (hidden ? "Odstranjen" : LIVE_MODE ? "V trgovini" : product.custom ? "Vaš izdelek" : "Osnovna ponudba") + "</span>" +
       "</div>" +
       '<div class="admin-item__actions">' + actions + "</div></article>"
     );
@@ -207,8 +340,15 @@
 
     root.innerHTML =
       '<div class="admin-top">' +
-      '<p class="admin-note">Pregled obiska, naročila strank, urejanje izdelkov in povezava Stripe plačil. Vsi podatki ostanejo samo v <code>localStorage</code> tega brskalnika.</p>' +
+      '<p class="admin-note">' +
+      (LIVE_MODE
+        ? "Pregled obiska, naročila strank, urejanje izdelkov in zaloge. Podatki se shranjujejo v bazo trgovine."
+        : "Pregled obiska, naročila strank, urejanje izdelkov in povezava Stripe plačil. Vsi podatki ostanejo samo v <code>localStorage</code> tega brskalnika.") +
+      "</p>" +
       '<div class="admin-top__actions">' +
+      (LIVE_MODE && liveEmail
+        ? '<span class="admin-user">' + NK.escapeHtml(liveEmail) + "</span>"
+        : "") +
       '<a class="btn btn--soft" href="index.html">Odpri trgovino</a>' +
       '<button class="btn btn--ghost" type="button" id="admin-logout">Odjava</button>' +
       "</div></div>" +
@@ -249,6 +389,14 @@
       artOptions(NK.categoryArt(defaultCategory)) +
       "</select></div>" +
       "</div>" +
+      (LIVE_MODE
+        ? '<div class="form-grid">' +
+          '<div class="field"><label for="admin-stock">Zaloga (kosi)</label>' +
+          '<input id="admin-stock" name="stockQty" type="number" min="0" step="1" value="0" placeholder="0"></div>' +
+          '<div class="field"><label for="admin-sku">Šifra izdelka <span>(neobvezno)</span></label>' +
+          '<input id="admin-sku" name="sku" type="text" maxlength="40" placeholder="NK-1001"></div>' +
+          "</div>"
+        : "") +
       '<div class="form-grid">' +
       '<div class="field"><label for="admin-color-name">Barva <span>(neobvezno)</span></label>' +
       '<input id="admin-color-name" name="colorName" type="text" maxlength="30" placeholder="npr. Mint"></div>' +
@@ -289,6 +437,15 @@
     if (logout) {
       logout.addEventListener("click", () => {
         setLoggedIn(false);
+        if (LIVE_MODE) {
+          apiRequest("/admin/logout", { method: "POST" })
+            .catch(() => {})
+            .finally(() => {
+              liveEmail = "";
+              renderLogin();
+            });
+          return;
+        }
         renderLogin();
       });
     }
@@ -430,7 +587,7 @@
       topPages: topPages,
       countries: countries,
       days: days,
-      pendingOrders: NK.getOrders().filter((order) => orderStatus(order) === "new").length,
+      pendingOrders: allOrders().filter((order) => orderStatus(order) === "new").length,
       recent: events.slice(-9).reverse()
     };
   }
@@ -774,21 +931,48 @@
       .join(", ");
     const deliveryLabel = order.delivery && order.delivery.label ? order.delivery.label : "Standardna dostava";
     const paymentLabel = order.payment && order.payment.label ? order.payment.label : "Kartica";
+    const paid = order.paymentStatus === "paid";
+    const paymentNote = LIVE_MODE ? (paid ? " · plačano" : " · neplačano") : "";
     const id = NK.escapeHtml(order.id);
+    const payButton =
+      LIVE_MODE && !paid && status !== "cancelled"
+        ? '<button class="btn btn--soft" type="button" data-order-paid="' +
+          id +
+          '">Označi kot plačano</button>'
+        : "";
     let actions = "";
-    if (status === "new") {
+    if (status === "pending_payment") {
+      actions =
+        '<span class="order-shipped-note">' +
+        ART.icon("lock", 15) +
+        " Čaka potrditev plačila</span>" +
+        payButton;
+    } else if (status === "new") {
       actions =
         '<button class="btn btn--primary" type="button" data-order-approve="' +
         id +
-        '">Odobri pošiljko</button>';
+        '">Odobri pošiljko</button>' +
+        payButton +
+        '<button class="btn btn--ghost" type="button" data-order-cancel="' +
+        id +
+        '">Prekliči</button>';
     } else if (status === "approved") {
       actions =
         '<button class="btn btn--primary" type="button" data-order-ship="' +
         id +
         '">Označi kot poslano</button>' +
+        payButton +
         '<button class="btn btn--ghost" type="button" data-order-reset="' +
         id +
         '">Razveljavi</button>';
+    } else if (status === "cancelled") {
+      actions =
+        '<span class="order-shipped-note">' +
+        ART.icon("x", 15) +
+        " Naročilo je preklicano</span>" +
+        '<button class="btn btn--ghost" type="button" data-order-reset="' +
+        id +
+        '">Ponovno odpri</button>';
     } else {
       actions =
         '<span class="order-shipped-note">' +
@@ -881,7 +1065,7 @@
       NK.escapeHtml(deliveryLabel) +
       "</span><span>" +
       ART.icon("shield", 15) +
-      NK.escapeHtml(paymentLabel) +
+      NK.escapeHtml(paymentLabel + paymentNote) +
       "</span></div>" +
       '<div class="order-admin__actions">' +
       actions +
@@ -902,27 +1086,35 @@
   }
 
   function ordersHtml() {
-    const orders = NK.getOrders().slice().reverse();
-    const counts = { new: 0, approved: 0, shipped: 0 };
+    const orders = allOrders()
+      .slice()
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const counts = { pending_payment: 0, new: 0, approved: 0, shipped: 0, cancelled: 0 };
     orders.forEach((order) => {
-      counts[orderStatus(order)] += 1;
+      const status = orderStatus(order);
+      counts[status] = (counts[status] || 0) + 1;
     });
     return (
       '<div class="admin-orders">' +
       '<div class="dash-head"><div><h2>Naročila strank</h2><p>Preglejte podatke strank in odobrite pošiljanje izdelkov.</p></div>' +
       '<div class="dash-actions">' +
       '<button class="btn btn--soft" type="button" data-order-refresh>Osveži</button>' +
-      '<button class="btn btn--soft" type="button" data-order-demo>Demo naročilo</button>' +
+      (LIVE_MODE ? "" : '<button class="btn btn--soft" type="button" data-order-demo>Demo naročilo</button>') +
       "</div></div>" +
       '<div class="order-stats">' +
       orderStat("Nova naročila", counts.new, "new") +
       orderStat("Odobrena", counts.approved, "approved") +
       orderStat("Poslana", counts.shipped, "shipped") +
+      (LIVE_MODE ? orderStat("Čaka plačilo", counts.pending_payment, "pending") : "") +
       "</div>" +
       (orders.length
         ? '<div class="orders-list">' + orders.map(orderCardHtml).join("") + "</div>"
         : '<div class="dash-empty">Ni še naročil. Dokončajte nakup v trgovini ali dodajte demo naročilo.</div>') +
-      '<p class="dash-footnote">Naročila so shranjena samo v tem brskalniku pod ključem <code>nakupko.orders.v1</code>. Odobritev pošiljke je demo oznaka; pravo obvestilo stranki bi poslal strežnik.</p>' +
+      '<p class="dash-footnote">' +
+      (LIVE_MODE
+        ? "Naročila se shranjujejo v bazo trgovine. Ob odobritvi in pošiljanju stranka prejme e-poštno obvestilo."
+        : "Naročila so shranjena samo v tem brskalniku pod ključem <code>nakupko.orders.v1</code>. Odobritev pošiljke je demo oznaka; pravo obvestilo stranki bi poslal strežnik.") +
+      "</p>" +
       "</div>"
     );
   }
@@ -930,11 +1122,45 @@
   function renderOrders() {
     const host = $("#admin-orders");
     if (!host) return;
+    if (LIVE_MODE) {
+      host.innerHTML = '<p class="muted">Nalagam naročila …</p>';
+      return apiRequest("/admin/orders")
+        .then((body) => {
+          liveOrders = body.orders || [];
+          NK.liveOrders = liveOrders;
+          host.innerHTML = ordersHtml();
+          bindOrders();
+        })
+        .catch((error) => {
+          host.innerHTML =
+            '<div class="dash-empty">Naročil ni bilo mogoče naložiti: ' +
+            NK.escapeHtml(error.message) +
+            "</div>";
+        });
+    }
     host.innerHTML = ordersHtml();
     bindOrders();
   }
 
   function changeOrderStatus(orderId, status) {
+    if (LIVE_MODE) {
+      apiRequest("/admin/orders/" + encodeURIComponent(orderId), {
+        method: "PATCH",
+        body: { status: status }
+      })
+        .then(() => {
+          const messages = {
+            approved: "Naročilo je odobreno. Stranka je prejela obvestilo.",
+            shipped: "Naročilo je označeno kot poslano. Stranka je prejela obvestilo.",
+            new: "Naročilo je ponovno odprto.",
+            cancelled: "Naročilo je preklicano."
+          };
+          NK.toast(messages[status] || "Status je posodobljen.", "success");
+          return refreshLiveData();
+        })
+        .catch((error) => NK.toast(error.message, "info"));
+      return;
+    }
     const result = NK.updateOrderStatus(orderId, status);
     if (!result.ok) {
       NK.toast(result.message || "Statusa ni bilo mogoče spremeniti.", "info");
@@ -947,6 +1173,19 @@
       new: "Odobritev je razveljavljena."
     };
     NK.toast(messages[status] || "Status je posodobljen.", "success");
+  }
+
+  function markOrderPaid(orderId) {
+    if (!LIVE_MODE) return;
+    if (!window.confirm("Označim to naročilo kot plačano?")) return;
+    apiRequest("/admin/orders/" + encodeURIComponent(orderId) + "/paid", {
+      method: "POST"
+    })
+      .then(() => {
+        NK.toast("Naročilo je označeno kot plačano.", "success");
+        return refreshLiveData();
+      })
+      .catch((error) => NK.toast(error.message, "info"));
   }
 
   function addDemoOrder() {
@@ -1059,6 +1298,17 @@
         changeOrderStatus(button.getAttribute("data-order-reset"), "new")
       );
     });
+    host.querySelectorAll("[data-order-cancel]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (!window.confirm("Prekličem to naročilo? Stranka bo obveščena.")) return;
+        changeOrderStatus(button.getAttribute("data-order-cancel"), "cancelled");
+      });
+    });
+    host.querySelectorAll("[data-order-paid]").forEach((button) => {
+      button.addEventListener("click", () =>
+        markOrderPaid(button.getAttribute("data-order-paid"))
+      );
+    });
   }
 
   function bindTabs() {
@@ -1095,6 +1345,33 @@
   }
 
   function stripePanelHtml() {
+    if (LIVE_MODE) {
+      const enabled = Boolean(NK.store && NK.store.stripeEnabled);
+      return (
+        '<div class="admin-layout admin-layout--payments">' +
+        '<section class="admin-card">' +
+        '<div class="admin-card__head"><div><h2>Stripe plačila</h2><p>Plačila s kartico potekajo prek Stripe Checkout.</p></div>' +
+        '<span class="admin-status ' +
+        (enabled ? "is-on" : "is-off") +
+        '">' +
+        (enabled ? "Povezano" : "Ni povezano") +
+        "</span></div>" +
+        '<p class="admin-note">' +
+        (enabled
+          ? "Stripe je povezan na strežniku. Skrivni ključ in webhook sta shranjena samo v okoljskih spremenljivkah strežnika in nista nikoli poslana v brskalnik."
+          : "Za plačila s kartico nastavite <code>STRIPE_SECRET_KEY</code> in <code>STRIPE_WEBHOOK_SECRET</code> v okolju strežnika.") +
+        "</p>" +
+        '<div class="admin-form__actions"><a class="btn btn--soft" href="https://dashboard.stripe.com/" target="_blank" rel="noopener">Odpri Stripe</a></div>' +
+        "</section>" +
+        '<aside class="admin-card admin-stripe-help">' +
+        '<div class="admin-card__head"><div><h2>Kako deluje</h2><p>Varno plačilo brez skrivnih ključev v brskalniku.</p></div></div>' +
+        '<ol class="admin-steps">' +
+        '<li><span>1</span><div><strong>Stranka odda naročilo</strong><p>Strežnik znova izračuna cene in zalogo ter ustvari Stripe sejo.</p></div></li>' +
+        '<li><span>2</span><div><strong>Plačilo na Stripe</strong><p>Stranka plača na varni Stripe strani.</p></div></li>' +
+        '<li><span>3</span><div><strong>Potrditev in e-pošta</strong><p>Webhook potrdi plačilo, zmanjša zalogo in pošlje potrditveno e-pošto.</p></div></li>' +
+        "</ol></aside></div>"
+      );
+    }
     const settings = NK.getStripeSettings();
     const status = stripeStatus(settings);
     const openHidden = NK.isValidStripeLink(settings.paymentLink) ? "" : " hidden";
@@ -1234,7 +1511,9 @@
   function renderHidden() {
     const host = $("#admin-hidden-wrap");
     if (!host) return;
-    const items = NK.getHiddenProducts();
+    const items = LIVE_MODE
+      ? liveProducts.filter((product) => product.active === false)
+      : NK.getHiddenProducts();
 
     if (!items.length) {
       host.innerHTML = "";
@@ -1296,6 +1575,76 @@
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       showFormError("");
+
+      if (LIVE_MODE) {
+        const price = Number(form.elements.price.value);
+        if (!form.elements.name.value.trim()) {
+          showFormError("Vnesite naziv izdelka.");
+          return;
+        }
+        if (!Number.isFinite(price) || price <= 0) {
+          showFormError("Vnesite veljavno ceno.");
+          return;
+        }
+        const base = liveEditing || {};
+        const colorName = form.elements.colorName.value.trim();
+        const colorHex = form.elements.colorHex.value;
+        const payload = {
+          name: form.elements.name.value.trim(),
+          brand: form.elements.brand.value.trim(),
+          category: form.elements.category.value,
+          price: price,
+          oldPrice: form.elements.oldPrice.value
+            ? Number(form.elements.oldPrice.value)
+            : null,
+          art: form.elements.art.value,
+          palette:
+            Array.isArray(base.palette) && base.palette.length
+              ? base.palette
+              : NK.customPalette(form.elements.category.value),
+          badge: base.badge || "",
+          colors: colorName
+            ? [{ name: colorName, hex: colorHex }]
+            : base.colors || [],
+          description: form.elements.description.value,
+          features: base.features || [],
+          specs: base.specs || {},
+          tags: base.tags || [],
+          stockQty: form.elements.stockQty
+            ? Math.max(0, Math.floor(Number(form.elements.stockQty.value) || 0))
+            : Number(base.stockQty) || 0,
+          active: true,
+          sku: form.elements.sku
+            ? form.elements.sku.value.trim()
+            : base.sku || ""
+        };
+        const request = editingId
+          ? apiRequest("/admin/products/" + encodeURIComponent(editingId), {
+              method: "PUT",
+              body: payload
+            })
+          : apiRequest("/admin/products", { method: "POST", body: payload });
+        const wasEditing = Boolean(editingId);
+        const submit = $("#admin-submit");
+        if (submit) submit.disabled = true;
+        request
+          .then(() => {
+            liveEditing = null;
+            editingId = "";
+            activeTab = "products";
+            NK.toast(
+              wasEditing ? "Izdelek je posodobljen." : "Izdelek je dodan v trgovino.",
+              "success"
+            );
+            return loadLiveData().then(() => renderPanel());
+          })
+          .catch((error) => {
+            showFormError(error.message);
+            if (submit) submit.disabled = false;
+          });
+        return;
+      }
+
       const result = NK.saveCustomProduct({
         id: editingId || undefined,
         name: form.elements.name.value,
@@ -1327,10 +1676,13 @@
 
   function resetForm() {
     editingId = "";
+    liveEditing = null;
     const form = $("#admin-form");
     if (!form) return;
     form.reset();
     form.elements.colorHex.value = "#0f766e";
+    if (form.elements.stockQty) form.elements.stockQty.value = "0";
+    if (form.elements.sku) form.elements.sku.value = "";
     form.elements.art.value = NK.categoryArt(form.elements.category.value);
     const title = $("#admin-form-title");
     if (title) title.textContent = "Dodaj izdelek";
@@ -1343,13 +1695,16 @@
   }
 
   function startEdit(id) {
-    const product = NK.getCustomProducts().find((item) => item.id === id);
+    const product = LIVE_MODE
+      ? liveProducts.find((item) => item.id === id)
+      : NK.getCustomProducts().find((item) => item.id === id);
     const form = $("#admin-form");
     if (!product || !form) return;
 
     activeTab = "products";
     setAdminTab("products");
     editingId = product.id;
+    liveEditing = product;
     form.elements.name.value = product.name;
     form.elements.category.value = product.category;
     form.elements.price.value = product.price;
@@ -1360,6 +1715,8 @@
     form.elements.colorName.value = color ? color.name : "";
     form.elements.colorHex.value = color ? color.hex : "#0f766e";
     form.elements.description.value = product.description || "";
+    if (form.elements.stockQty) form.elements.stockQty.value = String(Number(product.stockQty) || 0);
+    if (form.elements.sku) form.elements.sku.value = product.sku || "";
 
     const title = $("#admin-form-title");
     if (title) title.textContent = "Uredi izdelek";
@@ -1375,6 +1732,23 @@
   }
 
   function removeProduct(id) {
+    if (LIVE_MODE) {
+      const live = liveProducts.find((item) => item.id === id);
+      if (!live) return;
+      if (!window.confirm('Odstranim izdelek "' + live.name + '" iz trgovine? Pozneje ga lahko vrnete.')) return;
+      apiRequest("/admin/products/" + encodeURIComponent(id), { method: "DELETE" })
+        .then(() => {
+          NK.toast("Izdelek je odstranjen iz trgovine.", "success");
+          if (editingId === id) {
+            editingId = "";
+            liveEditing = null;
+          }
+          return loadLiveData().then(() => renderPanel());
+        })
+        .catch((error) => NK.toast(error.message, "info"));
+      return;
+    }
+
     const product =
       NK.getProduct(id) || NK.getHiddenProducts().find((item) => item.id === id);
     if (!product) return;
@@ -1403,6 +1777,17 @@
   }
 
   function restoreHiddenProduct(id) {
+    if (LIVE_MODE) {
+      apiRequest("/admin/products/" + encodeURIComponent(id) + "/restore", {
+        method: "POST"
+      })
+        .then(() => {
+          NK.toast("Izdelek je vrnjen v trgovino.", "success");
+          return loadLiveData().then(() => refreshLists());
+        })
+        .catch((error) => NK.toast(error.message, "info"));
+      return;
+    }
     if (!NK.restoreProduct(id)) return;
     NK.toast("Izdelek je vrnjen v trgovino.", "success");
     refreshLists();
@@ -1410,8 +1795,22 @@
 
   function boot() {
     NK.initGlobal();
-    if (isLoggedIn()) renderPanel();
-    else renderLogin();
+    if (!LIVE_MODE) {
+      if (isLoggedIn()) renderPanel();
+      else renderLogin();
+      return;
+    }
+    fetch(API + "/admin/session", { credentials: "same-origin" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((session) => {
+        if (!session || !session.email) {
+          renderLogin();
+          return;
+        }
+        liveEmail = session.email;
+        return loadLiveData().then(() => renderPanel());
+      })
+      .catch(() => renderLogin("Strežnik trgovine ni dosegljiv."));
   }
 
   if (document.readyState === "loading") {

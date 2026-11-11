@@ -16,10 +16,21 @@
     hiddenProducts: "nakupko.hidden-products.v1",
     analytics: "nakupko.analytics.v1",
     analyticsVisitor: "nakupko.analytics.visitor.v1",
-    stripe: "nakupko.stripe.v1"
+    stripe: "nakupko.stripe.v1",
+    consent: "nakupko.cookie-consent.v1"
   };
 
   const ANALYTICS_LIMIT = 1200;
+
+  const LIVE_MODE = window.NK_MODE === "live";
+  const API_BASE = window.NK_API || "/api";
+  document.documentElement.setAttribute("data-nk-mode", LIVE_MODE ? "live" : "demo");
+  let resolveReady;
+  const ready = LIVE_MODE
+    ? new Promise((resolve) => {
+        resolveReady = resolve;
+      })
+    : Promise.resolve();
 
   const moneyFormatter = new Intl.NumberFormat("sl-SI", {
     style: "currency",
@@ -364,11 +375,11 @@
     return list;
   }
 
-  const categories = Array.isArray(NK.categories) ? NK.categories : [];
+  let categories = Array.isArray(NK.categories) ? NK.categories : [];
   const baseProducts = Array.isArray(NK.products) ? NK.products : [];
-  const storedCustom = read(KEYS.customProducts, []);
+  const storedCustom = LIVE_MODE ? [] : read(KEYS.customProducts, []);
   const customProducts = (Array.isArray(storedCustom) ? storedCustom : []).filter(isValidCustomProduct);
-  const storedHidden = read(KEYS.hiddenProducts, []);
+  const storedHidden = LIVE_MODE ? [] : read(KEYS.hiddenProducts, []);
   const hiddenIds = new Set(
     (Array.isArray(storedHidden) ? storedHidden : []).filter((id) => typeof id === "string")
   );
@@ -387,6 +398,55 @@
     coupon: read(KEYS.coupon, ""),
     recent: read(KEYS.recent, []).filter((id) => byId.has(id))
   };
+
+  function applyLiveData(data) {
+    if (Array.isArray(data.products)) {
+      products = data.products;
+      NK.products = products;
+      NK.baseProducts = products.slice();
+      byId.clear();
+      products.forEach((product) => byId.set(product.id, product));
+      state.cart = state.cart.filter((item) => item && byId.has(item.id));
+      state.wishlist = state.wishlist.filter((id) => byId.has(id));
+      state.recent = state.recent.filter((id) => byId.has(id));
+      write(KEYS.cart, state.cart);
+      write(KEYS.wishlist, state.wishlist);
+      write(KEYS.recent, state.recent);
+    }
+    if (Array.isArray(data.categories)) {
+      categories = data.categories;
+      NK.categories = categories;
+    }
+    if (Array.isArray(data.brands)) NK.brands = data.brands;
+    if (data.coupons) NK.coupons = data.coupons;
+    if (data.settings) NK.store = data.settings;
+    if (data.session) NK.adminSession = data.session;
+    NK.live = true;
+    updateBadges();
+    renderCartDrawer();
+    document.dispatchEvent(new CustomEvent("nk:products-change"));
+  }
+
+  if (LIVE_MODE) {
+    fetch(API_BASE + "/bootstrap", { credentials: "same-origin" })
+      .then((response) => {
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        return response.json();
+      })
+      .then(applyLiveData)
+      .catch((error) => {
+        console.warn(
+          "Nakupko: živi API ni dosegljiv, uporabljam lokalne demo podatke.",
+          error
+        );
+        NK.live = false;
+      })
+      .finally(() => {
+        if (resolveReady) resolveReady();
+      });
+  } else {
+    NK.live = false;
+  }
 
   function saveCart() {
     write(KEYS.cart, state.cart);
@@ -832,13 +892,24 @@
           ? (subtotal * coupon.info.value) / 100
           : Math.min(coupon.info.value, subtotal);
     }
+    const store = NK.store || {};
+    const freeThreshold = Number.isFinite(Number(store.freeShippingThreshold))
+      ? Number(store.freeShippingThreshold)
+      : 50;
+    const standardCost = Number.isFinite(Number(store.standardShipping))
+      ? Number(store.standardShipping)
+      : 3.99;
+    const expressCost = Number.isFinite(Number(store.expressShipping))
+      ? Number(store.expressShipping)
+      : 6.99;
+    const codFee = Number.isFinite(Number(store.codFee)) ? Number(store.codFee) : 1.5;
     const delivery = opts.delivery || "standard";
     let shipping = 0;
-    if (delivery === "express") shipping = 6.99;
+    if (delivery === "express") shipping = expressCost;
     else if (delivery === "pickup") shipping = 0;
-    else shipping = subtotal >= 50 || subtotal === 0 ? 0 : 3.99;
+    else shipping = subtotal >= freeThreshold || subtotal === 0 ? 0 : standardCost;
     const payment = opts.payment || "card";
-    const fee = payment === "cod" ? 1.5 : 0;
+    const fee = payment === "cod" ? codFee : 0;
     const total = Math.max(0, subtotal - discount + shipping + fee);
     return {
       subtotal: subtotal,
@@ -846,7 +917,7 @@
       shipping: shipping,
       fee: fee,
       total: total,
-      freeShippingRemaining: Math.max(0, 50 - subtotal),
+      freeShippingRemaining: Math.max(0, freeThreshold - subtotal),
       coupon: coupon
     };
   }
@@ -1461,6 +1532,28 @@
     }
   }
 
+  function renderCookieNotice() {
+    if (!LIVE_MODE) return;
+    if (read(KEYS.consent, "") === "accepted") return;
+    if ($(".cookie-notice")) return;
+    const notice = document.createElement("div");
+    notice.className = "cookie-notice";
+    notice.setAttribute("role", "region");
+    notice.setAttribute("aria-label", "Obvestilo o piškotkih");
+    notice.innerHTML =
+      "<p><strong>Piškotki.</strong> Uporabljamo le nujne piškotke za košarico, prijavo v skrbništvo in varnost obrazcev. Ne uporabljamo oglaševanja ali sledenja. " +
+      '<a href="info.html#zasebnost">Več o zasebnosti</a></p>' +
+      '<button type="button" class="btn btn--primary" data-cookie-accept>Razumem</button>';
+    document.body.appendChild(notice);
+    const accept = notice.querySelector("[data-cookie-accept]");
+    if (accept) {
+      accept.addEventListener("click", () => {
+        write(KEYS.consent, "accepted");
+        notice.remove();
+      });
+    }
+  }
+
   function initGlobal() {
     if (NK._initialized) return;
     NK._initialized = true;
@@ -1470,6 +1563,7 @@
     renderCartDrawer();
     updateBadges();
     bindGlobalEvents();
+    renderCookieNotice();
     document.body.classList.add("js-ready");
     track("pageview", {
       path: window.location.pathname + window.location.search
@@ -1518,6 +1612,16 @@
     return { ok: true, order: updated };
   }
 
+  function clearCart() {
+    state.cart = [];
+    state.coupon = "";
+    write(KEYS.cart, state.cart);
+    write(KEYS.coupon, state.coupon);
+    updateBadges();
+    renderCartDrawer();
+    document.dispatchEvent(new CustomEvent("nk:cart-change"));
+  }
+
   function saveOrder(order) {
     if (order && order.totals) {
       track("order", {
@@ -1529,12 +1633,7 @@
     }
     const result = appendOrder(order);
     write(KEYS.lastOrder, result.order || order);
-    state.cart = [];
-    state.coupon = "";
-    write(KEYS.cart, state.cart);
-    write(KEYS.coupon, state.coupon);
-    updateBadges();
-    renderCartDrawer();
+    clearCart();
   }
 
   function getLastOrder() {
@@ -1579,6 +1678,9 @@
     openDrawer: openDrawer,
     closeDrawers: closeDrawers,
     saveOrder: saveOrder,
+    clearCart: clearCart,
+    ready: ready,
+    api: API_BASE,
     getOrders: getOrders,
     appendOrder: appendOrder,
     updateOrderStatus: updateOrderStatus,

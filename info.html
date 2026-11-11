@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pomoč in informacije | Nakupko</title>
-  <meta name="description" content="Dostava, vračila, plačilo, pogosta vprašanja in kontakt v demo trgovini Nakupko.">
+  <meta name="description" content="Dostava, vračila, plačilo, pogosta vprašanja, podatki o podjetju, splošni pogoji in zasebnost v trgovini Nakupko.">
   <meta name="theme-color" content="#146b56">
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/style.css">
@@ -30,8 +30,9 @@
             <li><a href="#placilo">Načini plačila</a></li>
             <li><a href="#faq">Pogosta vprašanja</a></li>
             <li><a href="#kontakt">Kontakt</a></li>
+            <li class="live-only"><a href="#ponudnik">Podatki o podjetju</a></li>
             <li><a href="#pogoji">Splošni pogoji</a></li>
-            <li><a href="#zasebnost">Zasebnost</a></li>
+            <li><a href="#zasebnost">Zasebnost in piškotki</a></li>
           </ul>
         </nav>
 
@@ -43,33 +44,53 @@
             <div class="info-cards">
               <div class="info-card">
                 <strong>Standardna dostava</strong>
-                <span>2–4 delovne dni · 3,99 €</span>
+                <span>2–4 delovne dni · <span data-store-price="standardShipping">3,99 €</span></span>
               </div>
               <div class="info-card">
                 <strong>Hitra dostava</strong>
-                <span>1–2 delovna dneva · 6,99 €</span>
+                <span>1–2 delovna dneva · <span data-store-price="expressShipping">6,99 €</span></span>
               </div>
               <div class="info-card">
                 <strong>Osebni prevzem</strong>
-                <span>Tržaška cesta 12, Ljubljana · brezplačno</span>
+                <span data-store-address>Tržaška cesta 12, Ljubljana</span> · brezplačno
               </div>
             </div>
             <h3>Brezplačna dostava</h3>
-            <p>Pri naročilih nad 50 € je standardna dostava brezplačna. Prag velja za vrednost izdelkov po popustu, brez morebitnega doplačila za plačilo po povzetju.</p>
+            <p>Pri naročilih nad <span data-store-price="freeShippingThreshold">50 €</span> je standardna dostava brezplačna. Prag velja za vrednost izdelkov po popustu, brez morebitnega doplačila za plačilo po povzetju.</p>
             <h3>Sledenje pošiljki</h3>
-            <p>Ko pošiljko predamo prevozniku, prejmete povezavo za sledenje. V demo različici se e-poštna sporočila ne pošiljajo; vsa potrditvena sporočila so samo prikazana na zaslonu.</p>
+            <p class="live-only">Ko pošiljko predamo prevozniku, prejmete e-poštno obvestilo s podatki za sledenje. Status svojega naročila lahko kadarkoli preverite prek povezave v potrditvenem sporočilu.</p>
+            <p class="demo-only">V demo različici se e-poštna sporočila ne pošiljajo; vsa potrditvena sporočila so samo prikazana na zaslonu.</p>
           </section>
 
           <section class="info-block" id="vracila">
             <p class="eyebrow">Brez skrbi</p>
             <h2>Vračila in reklamacije</h2>
-            <p>Izdelek lahko vrnete v 30 dneh od prejema brez pojasnila. Izdelek naj bo v originalni embalaži, neuporabljen in s priloženimi dodatki. Za vračilo ni potrebno navajati razloga.</p>
-            <ul>
-              <li>Vračilo prijavite prek e-pošte ali telefona.</li>
-              <li>Pošiljko zapakirajte tako, da je izdelek med prevozom zaščiten.</li>
-              <li>Stroške vračila krije kupec, razen pri napaki izdelka.</li>
-              <li>Povračilo izvedemo v 8 delovnih dneh po prejemu vračila.</li>
-            </ul>
+
+            <div class="live-only">
+              <p>Pri nakupu na daljavo imate v skladu z Zakonom o varstvu potrošnikov pravico, da v <strong>14 dneh</strong> od prejema blaga odstopite od pogodbe brez navedbe razloga. Rok začne teči z dnem, ko blago prevzamete. Nakupko kot dodatno ugodnost omogoča vračilo v <strong>30 dneh</strong> od prejema.</p>
+              <ul>
+                <li>Odstop nam sporočite po e-pošti <a href="mailto:narocila@nakupko.local" data-store-email>narocila@nakupko.local</a> ali s priloženim obrazcem.</li>
+                <li>Blago nam vrnite v 14 dneh po sporočilu o odstopu, v originalni embalaži in z vsemi priloženimi deli.</li>
+                <li>Stroške vračila pošiljke krije kupec, razen če je izdelek poškodovan ali napačen.</li>
+                <li>Plačilo povrnemo v 14 dneh po prejemu vračila oziroma po prejemu dokazila o odpremi, na enak način, kot ste ga izvedli.</li>
+              </ul>
+              <details>
+                <summary>Obrazec za odstop od pogodbe</summary>
+                <p>Ponudnik: <span data-store-name>Nakupko</span>, <span data-store-address>Tržaška cesta 1, 1000 Ljubljana</span>, <span data-store-email>narocila@nakupko.local</span>.</p>
+                <p>Obvestilo o odstopu od pogodbe: s tem sporočam, da odstopam od pogodbe za naslednje blago (naziv in količina), naročeno dne ______, prejeto dne ______. Ime in priimek kupca: ______. Naslov kupca: ______. Datum: ______. Podpis (samo pri pisnem obvestilu): ______.</p>
+              </details>
+            </div>
+
+            <div class="demo-only">
+              <p>Izdelek lahko vrnete v 30 dneh od prejema brez pojasnila. Izdelek naj bo v originalni embalaži, neuporabljen in s priloženimi dodatki. Za vračilo ni potrebno navajati razloga.</p>
+              <ul>
+                <li>Vračilo prijavite prek e-pošte ali telefona.</li>
+                <li>Pošiljko zapakirajte tako, da je izdelek med prevozom zaščiten.</li>
+                <li>Stroške vračila krije kupec, razen pri napaki izdelka.</li>
+                <li>Povračilo izvedemo v 8 delovnih dneh po prejemu vračila.</li>
+              </ul>
+            </div>
+
             <h3>Reklamacija</h3>
             <p>Če izdelek ne deluje ali je poškodovan, nas čim prej obvestite in priložite fotografije. Reklamacijo obravnavamo v skladu z veljavno potrošniško zakonodajo. Garancijski rok je naveden pri posameznem izdelku.</p>
           </section>
@@ -77,7 +98,8 @@
           <section class="info-block" id="placilo">
             <p class="eyebrow">Varno in preprosto</p>
             <h2>Načini plačila</h2>
-            <p>V demo trgovini je vsak način plačila samo prikaz. Pravo plačilo ni izvedeno in nobeni podatki o kartici niso zahtevani ali shranjeni.</p>
+            <p class="demo-only">V demo trgovini je vsak način plačila samo prikaz. Pravo plačilo ni izvedeno in nobeni podatki o kartici niso zahtevani ali shranjeni.</p>
+            <p class="live-only">Plačilo izberete na blagajni. Podatkov o kartici ne shranjujemo; kartična plačila obdeluje Stripe v skladu s svojimi varnostnimi standardi.</p>
             <div class="info-cards">
               <div class="info-card">
                 <strong>Kartica</strong>
@@ -85,13 +107,14 @@
               </div>
               <div class="info-card">
                 <strong>Po povzetju</strong>
-                <span>Plačilo ob prevzemu · +1,50 €</span>
+                <span>Plačilo ob prevzemu · +<span data-store-price="codFee">1,50 €</span></span>
               </div>
               <div class="info-card">
                 <strong>Bančno nakazilo</strong>
                 <span>Podatke prejmete po e-pošti · brez doplačila</span>
               </div>
             </div>
+            <p class="live-only">Pri bančnem nakazilu navedite sklic, ki ga prejmete ob potrditvi naročila. Naročilo odpremimo, ko je plačilo knjiženo na naš račun. IBAN: <strong data-store-iban>—</strong>.</p>
             <p>Vse cene so v evrih in vključujejo DDV. Morebitni popusti se obračunajo ob vnosu veljavne kode v košarici.</p>
           </section>
 
@@ -99,13 +122,25 @@
             <p class="eyebrow">Hitri odgovori</p>
             <h2>Pogosta vprašanja</h2>
             <div class="faq">
-              <details>
+              <details class="live-only">
+                <summary>Ali je Nakupko prava trgovina?</summary>
+                <p>Da. Naročila oddana na tej strani se zabeležijo v naši trgovini, izdelke pa odpremimo na navedeni naslov. Za vprašanja smo dosegljivi prek e-pošte in telefona.</p>
+              </details>
+              <details class="demo-only">
                 <summary>Ali je to prava trgovina?</summary>
                 <p>Ne. Nakupko je demo projekt z izmišljenimi izdelki, cenami in podatki. Namenjen je prikazu delovanja spletne trgovine in ne prodaji.</p>
               </details>
-              <details>
+              <details class="live-only">
+                <summary>Kje so moji podatki in kako jih lahko izbrišem?</summary>
+                <p>Podatke o naročilu hranimo na strežniku trgovine, dokler je to potrebno za izpolnitev pogodbe in zakonske obveznosti. Za vpogled, popravek ali izbris pišite na <a href="mailto:narocila@nakupko.local" data-store-email>narocila@nakupko.local</a>. Podrobnosti so v poglavju <a href="#zasebnost">Zasebnost in piškotki</a>.</p>
+              </details>
+              <details class="demo-only">
                 <summary>Kje se shranijo moji podatki?</summary>
                 <p>Košarica, seznam želja in zadnje naročilo se shranijo v lokalno shrambo vašega brskalnika (localStorage). Podatki ne zapustijo naprave in se ne pošiljajo na strežnik.</p>
+              </details>
+              <details class="live-only">
+                <summary>Kako preverim status svojega naročila?</summary>
+                <p>Ob oddaji naročila prejmete e-pošto s povezavo do strani naročila. Povezava vsebuje varen žeton, zato je ne delite z drugimi. Na strani so prikazani status, povzetek in način plačila.</p>
               </details>
               <details>
                 <summary>Kako uporabim kodo za popust?</summary>
@@ -113,13 +148,13 @@
               </details>
               <details>
                 <summary>Zakaj se slike izdelkov razlikujejo od fotografij?</summary>
-                <p>Vsi prikazi so originalne vektorske ilustracije, ustvarjene za ta demo. Trgovina ne uporablja fotografij ali blagovnih znamk drugih podjetij.</p>
+                <p>Vsi prikazi so originalne vektorske ilustracije, ustvarjene za to trgovino. Trgovina ne uporablja fotografij ali blagovnih znamk drugih podjetij.</p>
               </details>
-              <details>
+              <details class="demo-only">
                 <summary>Ali lahko stran odprem brez interneta?</summary>
                 <p>Da. Stran ne nalaga zunanjih pisav, slik ali skript. Dovolj je, da datoteke odprete v brskalniku — povezave med stranmi delujejo lokalno.</p>
               </details>
-              <details>
+              <details class="demo-only">
                 <summary>Kako ponastavim demo podatke?</summary>
                 <p>Počistite podatke spletnega mesta v nastavitvah brskalnika ali v konzoli za razvijalce odstranite ključe, ki se začnejo z <code>nakupko.</code>.</p>
               </details>
@@ -129,21 +164,22 @@
           <section class="info-block" id="kontakt">
             <p class="eyebrow">Tu smo za vas</p>
             <h2>Kontakt</h2>
-            <p>Za vprašanja o izdelkih, naročilih ali vračilih nam pišite ali pokličite. V demo različici so vsi kontaktni podatki izmišljeni.</p>
+            <p class="demo-only">Za vprašanja o izdelkih, naročilih ali vračilih nam pišite ali pokličite. V demo različici so vsi kontaktni podatki izmišljeni.</p>
+            <p class="live-only">Za vprašanja o izdelkih, naročilih ali vračilih nam pišite ali pokličite. Odgovorimo v enem delovnem dnevu.</p>
             <div class="contact-grid">
               <div class="contact-card">
                 <h3>E-pošta</h3>
-                <p><a href="mailto:pozdrav@nakupko.si">pozdrav@nakupko.si</a></p>
+                <p><a href="mailto:pozdrav@nakupko.si" data-store-email>pozdrav@nakupko.si</a></p>
                 <p>Odgovorimo v enem delovnem dnevu.</p>
               </div>
               <div class="contact-card">
                 <h3>Telefon</h3>
-                <p><a href="tel:+38612345678">+386 1 234 56 78</a></p>
+                <p><a href="tel:+38612345678" data-store-phone>+386 1 234 56 78</a></p>
                 <p>Pon–pet: 8–18, sob: 9–13.</p>
               </div>
               <div class="contact-card">
                 <h3>Naslov</h3>
-                <p>Tržaška cesta 12<br>1000 Ljubljana<br>Slovenija</p>
+                <p data-store-address>Tržaška cesta 12<br>1000 Ljubljana<br>Slovenija</p>
               </div>
               <div class="contact-card">
                 <h3>Osebni prevzem</h3>
@@ -152,25 +188,113 @@
             </div>
           </section>
 
+          <section class="info-block live-only" id="ponudnik">
+            <p class="eyebrow">Pravne informacije</p>
+            <h2>Podatki o podjetju</h2>
+            <div class="info-cards">
+              <div class="info-card">
+                <strong>Ponudnik</strong>
+                <span data-store-name>Nakupko</span>
+              </div>
+              <div class="info-card">
+                <strong>Naslov</strong>
+                <span data-store-address>Tržaška cesta 1, 1000 Ljubljana</span>
+              </div>
+              <div class="info-card">
+                <strong>Davčna številka</strong>
+                <span data-store-vat>SI00000000</span>
+              </div>
+              <div class="info-card">
+                <strong>E-pošta</strong>
+                <span data-store-email>narocila@nakupko.local</span>
+              </div>
+              <div class="info-card">
+                <strong>Telefon</strong>
+                <span data-store-phone>+386 1 000 00 00</span>
+              </div>
+              <div class="info-card">
+                <strong>IBAN</strong>
+                <span data-store-iban>—</span>
+              </div>
+            </div>
+            <p>Podatki so namenjeni informiranju potrošnikov v skladu z Zakonom o varstvu potrošnikov in Zakonom o elektronskem poslovanju na trgu.</p>
+          </section>
+
           <section class="info-block" id="pogoji">
             <p class="eyebrow">Pravne informacije</p>
             <h2>Splošni pogoji</h2>
-            <p>Ta stran je demonstracijski prikaz. Vsi izdelki, cene, zaloge, ocene in podatki o podjetju so izmišljeni. Nič na tej strani ne predstavlja ponudbe za sklenitev pogodbe.</p>
-            <p>Vsebina je namenjena lokalnemu ogledu in učenju. Ponovna uporaba kode je dovoljena v okviru projekta, v katerem je nastala; blagovna znamka Nakupko je prav tako del tega demo projekta.</p>
-            <h3>Odgovornost</h3>
-            <p>Demo ne zagotavlja pravilnosti podatkov o izdelkih in ne prevzema odgovornosti za morebitno uporabo v resničnem poslovanju. Za pravo trgovino je treba dodati strežniško logiko, plačilnega ponudnika, davčne podatke in skladnost z zakonodajo.</p>
+
+            <div class="live-only">
+              <p>Ti splošni pogoji urejajo nakup izdelkov v spletni trgovini Nakupko, ki jo upravlja <span data-store-name>Nakupko</span>, <span data-store-address>Tržaška cesta 1, 1000 Ljubljana</span>, davčna številka <span data-store-vat>SI00000000</span>.</p>
+              <h3>Naročilo in sklenitev pogodbe</h3>
+              <p>Z oddajo naročila kupec potrdi, da se je seznanil s temi pogoji in politiko zasebnosti. Pogodba je sklenjena, ko trgovec naročilo potrdi po e-pošti. Cene in zaloge se ob oddaji naročila preverijo na strežniku; če izdelka ni na zalogi, o tem obvestimo kupca in naročilo po potrebi prilagodimo ali prekličemo.</p>
+              <h3>Cene in plačilo</h3>
+              <p>Vse cene so izražene v evrih in vključujejo DDV. Stroški dostave in morebitno doplačilo za plačilo po povzetju so prikazani pred potrditvijo naročila. Na voljo so plačilo s kartico prek Stripe, plačilo po povzetju in bančno nakazilo.</p>
+              <h3>Dostava</h3>
+              <p>Izdelke odpremimo v rokih, navedenih v poglavju <a href="#dostava">Dostava</a>. Če dostava zaradi okoliščin, na katere ne moremo vplivati, zamuja, kupca obvestimo. Kupec je dolžan prevzeti pošiljko na navedenem naslovu.</p>
+              <h3>Odstop od pogodbe</h3>
+              <p>Potrošnik ima pravico do odstopa od pogodbe v 14 dneh od prejema blaga, brez navedbe razloga. Postopek, obrazec in pogoji vračila so opisani v poglavju <a href="#vracila">Vračila in reklamacije</a>.</p>
+              <h3>Reklamacije in odgovornost</h3>
+              <p>Za napake na izdelku odgovarjamo v skladu z zakonom. Reklamacijo lahko kupca pošlje na <span data-store-email>narocila@nakupko.local</span>. Odgovornost za posredno škodo je omejena v okviru, ki ga dopušča veljavna zakonodaja.</p>
+              <h3>Reševanje sporov</h3>
+              <p>Morebitne spore poskušamo rešiti sporazumno. Potrošnik lahko uporabi tudi platformo Evropske komisije za spletno reševanje sporov (ec.europa.eu/consumers/odr) ali se obrne na pristojni inšpektorat.</p>
+              <p>Pogoji veljajo od objave na tej strani. O spremembah obvestimo na tej strani; za posamezno naročilo velja različica, veljavna ob oddaji naročila.</p>
+            </div>
+
+            <div class="demo-only">
+              <p>Ta stran je demonstracijski prikaz. Vsi izdelki, cene, zaloge, ocene in podatki o podjetju so izmišljeni. Nič na tej strani ne predstavlja ponudbe za sklenitev pogodbe.</p>
+              <p>Vsebina je namenjena lokalnemu ogledu in učenju. Ponovna uporaba kode je dovoljena v okviru projekta, v katerem je nastala; blagovna znamka Nakupko je prav tako del tega demo projekta.</p>
+              <h3>Odgovornost</h3>
+              <p>Demo ne zagotavlja pravilnosti podatkov o izdelkih in ne prevzema odgovornosti za morebitno uporabo v resničnem poslovanju. Za pravo trgovino je treba dodati strežniško logiko, plačilnega ponudnika, davčne podatke in skladnost z zakonodajo.</p>
+            </div>
           </section>
 
           <section class="info-block" id="zasebnost">
             <p class="eyebrow">Zasebnost</p>
             <h2>Zasebnost in piškotki</h2>
-            <p>Nakupko ne uporablja piškotkov za sledenje, analitike ali oglaševanje. Za delovanje košarice in seznama želja uporablja lokalno shrambo brskalnika, ki ostane na vaši napravi.</p>
-            <ul>
-              <li>Shranjeni ključi: košarica, seznam želja, koda za popust, nedavno ogledani izdelki in zadnje naročilo.</li>
-              <li>Podatki se ne pošiljajo na noben strežnik.</li>
-              <li>Brisanje podatkov spletnega mesta odstrani vse shranjene vrednosti.</li>
-            </ul>
-            <p>Obrazec na blagajni je namenjen prikazu poteka nakupa. Vneseni podatki se shranijo le v vašem brskalniku kot del demo naročila.</p>
+
+            <div class="live-only">
+              <p>Upravljavec osebnih podatkov je <span data-store-name>Nakupko</span>, <span data-store-address>Tržaška cesta 1, 1000 Ljubljana</span>. Osebne podatke obdelujemo v skladu s Splošno uredbo o varstvu podatkov (GDPR) in veljavno slovensko zakonodajo.</p>
+              <h3>Katere podatke obdelujemo</h3>
+              <ul>
+                <li>Podatke o naročilu: ime, naslov, e-pošta, telefon, vsebina in vrednost naročila.</li>
+                <li>Podatke o plačilu: način plačila in status plačila. Podatkov o kartici ne shranjujemo; obdeluje jih Stripe.</li>
+                <li>Tehnične podatke: IP naslov in čas zahtev v strežniških dnevnikih ter piškotek za prijavo v skrbništvo.</li>
+              </ul>
+              <h3>Namen in pravna podlaga</h3>
+              <p>Podatke obdelujemo za izvedbo naročila in dostavo (izpolnitev pogodbe), za izpolnjevanje računovodskih in davčnih obveznosti (zakonska obveznost) ter za varnost in preprečevanje zlorab (zakoniti interes). Trženjskih sporočil brez privolitve ne pošiljamo.</p>
+              <h3>Obdelovalci in prejemniki</h3>
+              <p>Podatke zaupamo le ponudnikom, ki so potrebni za delovanje trgovine: Stripe (plačila), ponudnik gostovanja in baze podatkov ter ponudnik e-pošte. Z njimi sklenemo ustrezne pogodbe o obdelavi. Podatkov ne prodajamo.</p>
+              <h3>Hramba</h3>
+              <p>Podatke o naročilih hranimo toliko časa, kolikor zahtevajo računovodski predpisi in morebitni garancijski roki. Podatke, za katere ne obstaja več pravna podlaga, izbrišemo ali anonimiziramo.</p>
+              <h3>Vaše pravice</h3>
+              <ul>
+                <li>Dostop do svojih podatkov in kopija podatkov.</li>
+                <li>Popravek netočnih podatkov in omejitev obdelave.</li>
+                <li>Izbris podatkov, kadar zanj obstaja pravna podlaga.</li>
+                <li>Prenosljivost podatkov in ugovor obdelavi na podlagi zakonitega interesa.</li>
+                <li>Pritožba pri Informacijskem pooblaščencu Republike Slovenije.</li>
+              </ul>
+              <p>Za uveljavljanje pravic pišite na <span data-store-email>narocila@nakupko.local</span>. Odgovorimo v enem mesecu.</p>
+              <h3>Piškotki</h3>
+              <p>Uporabljamo le nujne piškotke in lokalno shrambo, ki so potrebni za delovanje trgovine. Ne uporabljamo oglaševanja, zunanjega sledenja ali analitike tretjih oseb.</p>
+              <ul>
+                <li><code>nk_admin</code> — podpisana seja za prijavo v skrbništvo (HttpOnly, velja do odjave oziroma največ 7 dni).</li>
+                <li><code>nakupko.cookie-consent.v1</code> — zapis, da ste se seznanili z obvestilom o piškotkih.</li>
+                <li>Lokalna shramba: košarica, seznam želja, koda za popust in nastavitve prikaza. Ostane v vašem brskalniku.</li>
+              </ul>
+              <p>Piškotke lahko kadar koli izbrišete v nastavitvah brskalnika. Ob tem se lahko izgubijo shranjena košarica in druge nastavitve.</p>
+            </div>
+
+            <div class="demo-only">
+              <p>Nakupko ne uporablja piškotkov za sledenje, analitike ali oglaševanje. Za delovanje košarice in seznama želja uporablja lokalno shrambo brskalnika, ki ostane na vaši napravi.</p>
+              <ul>
+                <li>Shranjeni ključi: košarica, seznam želja, koda za popust, nedavno ogledani izdelki in zadnje naročilo.</li>
+                <li>Podatki se ne pošiljajo na noben strežnik.</li>
+                <li>Brisanje podatkov spletnega mesta odstrani vse shranjene vrednosti.</li>
+              </ul>
+              <p>Obrazec na blagajni je namenjen prikazu poteka nakupa. Vneseni podatki se shranijo le v vašem brskalniku kot del demo naročila.</p>
+            </div>
           </section>
         </div>
       </div>
@@ -179,6 +303,7 @@
 
   <div id="site-footer"></div>
 
+  <script src="config.js"></script>
   <script src="assets/js/data.js"></script>
   <script src="assets/js/art.js"></script>
   <script src="assets/js/core.js"></script>

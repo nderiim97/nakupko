@@ -5,6 +5,38 @@ delovanja e-trgovine. Vse blagovne znamke, izdelki, cene, ocene in kontaktni pod
 so izmišljeni. Stran ne uporablja zunanjih pisav, slik, oglaševanja ali zunanjega
 sledenja. Statistika obiska je lokalna in ostane v vašem brskalniku.
 
+## Dva načina delovanja
+
+| Način | Kako se zažene | Podatki |
+| --- | --- | --- |
+| **Demo** | odprite `index.html` ali GitHub Pages | vse v brskalniku (`localStorage`) |
+| **Prava trgovina** | FastAPI strežnik (`server/`) | baza, prave zaloge, naročila, Stripe, e-pošta |
+
+Demo ostane uporaben brez strežnika. Za pravo trgovino zaženite:
+
+```powershell
+pip install -r server/requirements.txt
+copy .env.example .env
+python -m uvicorn server.main:app --reload --port 8000
+```
+
+Odprite <http://127.0.0.1:8000>. Strežnik samodejno uvozi katalog iz
+`assets/js/data.js`, ustvari skrbnika iz `.env` in služi `/config.js`, ki
+frontend preklopi v živi način. Podrobna navodila za Stripe, e-pošto, Postgres
+in uvajanje so v [`server/README.md`](server/README.md).
+
+V živem načinu velja:
+
+- izdelki in zaloge se berejo iz baze, cene se ob naročilu preverijo na strežniku,
+- naročila se shranijo v bazo, stranka prejme povezavo do svojega naročila,
+- kartična plačila potekajo prek Stripe Checkout, potrditev pa prek webhooka,
+- skrbništvo se prijavi z e-pošto in geslom ter uporablja podpisano sejo,
+- e-poštna obvestila se pošljejo prek SMTP (brez SMTP se izpišejo v dnevnik),
+- pravne strani (splošni pogoji, zasebnost, podatki o podjetju, odstop od pogodbe)
+  se v živi trgovini prikažejo s podatki iz `STORE_*`, ob prvem obisku pa se
+  prikaže obvestilo o nujnih piškotkih.
+
+
 ## Kako odpreti
 
 Najpreprosteje:
