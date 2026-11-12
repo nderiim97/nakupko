@@ -46,6 +46,10 @@ class Settings:
     # Security -------------------------------------------------------------
     secret_key: str = os.getenv("SECRET_KEY", "dev-only-change-me")
     session_days: int = int(os.getenv("SESSION_DAYS", "7"))
+    # Render (and most hosts) put the visitor IP in X-Forwarded-For.
+    trust_proxy: bool = _bool(
+        os.getenv("TRUST_PROXY"), default=environment == "production"
+    )
 
     # Database -------------------------------------------------------------
     database_url: str = _database_url()

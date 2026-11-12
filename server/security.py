@@ -1,4 +1,4 @@
-"""Password hashing, signed session cookies and login throttling."""
+"""Password hashing, signed session cookies and request throttling."""
 
 from __future__ import annotations
 
@@ -116,6 +116,16 @@ def require_admin(admin: AdminUser | None = Depends(current_admin)) -> AdminUser
 
 
 # --------------------------------------------------------------------- throttle
+def client_ip(request: Request) -> str:
+    """Return the visitor IP, honouring the proxy header used by Render."""
+    if settings.trust_proxy:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        first = forwarded.split(",")[0].strip()
+        if first:
+            return first
+    return request.client.host if request.client else "unknown"
+
+
 _attempts: dict[str, list[float]] = defaultdict(list)
 _WINDOW = 10 * 60
 _MAX_ATTEMPTS = 8
@@ -134,3 +144,29 @@ def register_failed_login(ip: str) -> None:
 
 def clear_login_attempts(ip: str) -> None:
     _attempts.pop(ip, None)
+
+
+# Generic per-IP limiter for public endpoints (orders, order lookup, retry).
+_limits: dict[tuple[str, str], list[float]] = defaultdict(list)
+
+
+def rate_limit(request: Request, bucket: str, limit: int, window: int = 600) -> None:
+    """Raise HTTP 429 when an IP exceeds ``limit`` calls in ``window`` seconds."""
+    key = (bucket, client_ip(request))
+    now = time.time()
+    recent = [stamp for stamp in _limits[key] if now - stamp < window]
+    if len(recent) >= limit:
+        _limits[key] = recent
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Preveč zahtev. Poskusite znova čez nekaj minut.",
+            headers={"Retry-After": str(window)},
+        )
+    recent.append(now)
+    _limits[key] = recent
+
+
+def reset_rate_limits() -> None:
+    """Clear in-memory counters (used by tests and after configuration reload)."""
+    _limits.clear()
+    _attempts.clear()

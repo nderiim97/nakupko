@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Static sitemap for the GitHub Pages demo. The live store generates its own
+     sitemap at /sitemap.xml from the database and PUBLIC_BASE_URL. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://nderiim97.github.io/nakupko/</loc><priority>1.0</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/category.html</loc><priority>0.9</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/info.html</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/category.html?cat=bela-tehnika</loc><priority>0.7</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/category.html?cat=racunalnistvo</loc><priority>0.7</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/category.html?cat=tv-avdio</loc><priority>0.7</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/category.html?cat=mali-aparati</loc><priority>0.7</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/category.html?cat=dom</loc><priority>0.7</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/category.html?cat=sport</loc><priority>0.7</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/category.html?cat=zdravje</loc><priority>0.7</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/category.html?cat=igrace</loc><priority>0.7</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=pralni-stroj-aria-wash-8</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=hladilnik-nordika-cool-320</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=pomivalni-stroj-forma-clean-13</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=prenosnik-lumen-air-14</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=monitor-lumen-view-27</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=slusalke-pika-wave</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=televizor-lumen-vision-55</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=zvocnik-mimo-room</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=espresso-kavo-press</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=mesalnik-vita-mix</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=kuhalnik-vita-rapid</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=svetilka-lumen-arc</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=preproga-terra-soft</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=organizator-nook-stack</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=joga-podloga-terra-flow</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=termovka-mimo-trail</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=difuzor-vita-calm</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=nega-vita-ritual</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=kocke-pika-wood</loc><priority>0.6</priority></url>
+  <url><loc>https://nderiim97.github.io/nakupko/product.html?id=medvedek-nook-hugo</loc><priority>0.6</priority></url>
+</urlset>

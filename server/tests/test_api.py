@@ -43,6 +43,72 @@ def test_health(client):
     assert response.json()["ok"] is True
 
 
+def test_security_headers(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert "content-security-policy" in response.headers
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+
+
+def test_robots_and_sitemap(client):
+    robots = client.get("/robots.txt")
+    assert robots.status_code == 200
+    assert "Sitemap: http://testserver/sitemap.xml" in robots.text
+    assert "/admin.html" in robots.text
+
+    sitemap = client.get("/sitemap.xml")
+    assert sitemap.status_code == 200
+    assert sitemap.headers["content-type"].startswith("application/xml")
+    assert sitemap.text.lstrip().startswith("<?xml")
+    assert "<urlset" in sitemap.text
+    assert "/product.html?id=" in sitemap.text
+    assert "/category.html?cat=" in sitemap.text
+
+
+def test_branded_404_for_browsers(client):
+    page = client.get("/missing-page.html", headers={"Accept": "text/html"})
+    assert page.status_code == 404
+    assert "Napaka 404" in page.text
+
+    api = client.get("/api/missing-endpoint")
+    assert api.status_code == 404
+    assert api.headers["content-type"].startswith("application/json")
+
+
+def test_admin_responses_are_not_cached(client):
+    login = client.post(
+        "/api/admin/login",
+        json={"email": "admin@test.local", "password": "12345678"},
+    )
+    assert login.status_code == 200
+    session = client.get("/api/admin/session")
+    assert session.status_code == 200
+    assert session.headers["cache-control"] == "no-store"
+
+    admin_page = client.get("/admin.html")
+    assert admin_page.headers["x-robots-tag"] == "noindex, nofollow"
+    client.post("/api/admin/logout")
+
+
+def test_rate_limit_blocks_after_limit():
+    from fastapi import HTTPException
+    from starlette.requests import Request
+
+    from server.security import rate_limit, reset_rate_limits
+
+    reset_rate_limits()
+    request = Request({"type": "http", "client": ("10.0.0.99", 1234), "headers": []})
+    for _ in range(3):
+        rate_limit(request, "unit-test", limit=3, window=60)
+    with pytest.raises(HTTPException) as error:
+        rate_limit(request, "unit-test", limit=3, window=60)
+    assert error.value.status_code == 429
+    reset_rate_limits()
+
+
 def test_database_url_uses_psycopg(monkeypatch):
     from server.config import _database_url
 

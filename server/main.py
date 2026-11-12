@@ -13,6 +13,8 @@ import unicodedata
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from decimal import Decimal
+from urllib.parse import quote
+from xml.sax.saxutils import escape as xml_escape
 
 from fastapi import (
     BackgroundTasks,
@@ -38,9 +40,11 @@ from .security import (
     COOKIE_NAME,
     SESSION_MAX_AGE,
     clear_login_attempts,
+    client_ip,
     create_session_token,
     current_admin,
     login_allowed,
+    rate_limit,
     register_failed_login,
     require_admin,
     verify_password,
@@ -97,6 +101,44 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# The storefront is fully self-hosted: no external scripts, fonts or images.
+# Inline styles stay allowed because a few pages use style attributes.
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; "
+    "font-src 'self'; "
+    "connect-src 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "object-src 'none'"
+)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(self)"
+    )
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    # Swagger UI loads its assets from a CDN, so keep the CSP off the docs.
+    if path not in {"/docs", "/redoc", "/openapi.json"}:
+        response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+    if settings.public_base_url.startswith("https://"):
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+    if path.startswith(("/api/admin", "/api/orders")):
+        response.headers["Cache-Control"] = "no-store"
+    if path == "/admin.html":
+        response.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
+    return response
 
 
 # ------------------------------------------------------------------ utilities
@@ -187,6 +229,53 @@ def health() -> dict:
     }
 
 
+@app.get("/robots.txt", include_in_schema=False)
+def robots_txt() -> PlainTextResponse:
+    body = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /admin.html\n"
+        "Disallow: /api/\n"
+        "Disallow: /cart.html\n"
+        "Disallow: /checkout.html\n"
+        "Disallow: /order.html\n"
+        "\n"
+        f"Sitemap: {settings.public_base_url}/sitemap.xml\n"
+    )
+    return PlainTextResponse(body, media_type="text/plain")
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap_xml(db: Session = Depends(get_db)) -> Response:
+    base = settings.public_base_url
+    urls: list[tuple[str, str]] = [
+        (f"{base}/", "1.0"),
+        (f"{base}/category.html", "0.9"),
+        (f"{base}/info.html", "0.6"),
+    ]
+    for category in db.scalars(select(Category).order_by(Category.sort)).all():
+        urls.append((f"{base}/category.html?cat={quote(category.slug)}", "0.7"))
+    for product_id in db.scalars(
+        select(Product.id).where(Product.active.is_(True)).order_by(Product.added)
+    ).all():
+        urls.append((f"{base}/product.html?id={quote(product_id)}", "0.6"))
+
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for loc, priority in urls:
+        lines.append(
+            f"  <url><loc>{xml_escape(loc)}</loc><priority>{priority}</priority></url>"
+        )
+    lines.append("</urlset>")
+    return Response(
+        "\n".join(lines) + "\n",
+        media_type="application/xml",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
 @app.get("/api/bootstrap")
 def bootstrap(
     db: Session = Depends(get_db),
@@ -252,9 +341,11 @@ def get_settings() -> dict:
 @app.post("/api/orders", status_code=201)
 def create_order(
     payload: OrderIn,
+    request: Request,
     background: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> dict:
+    rate_limit(request, "orders", limit=15)
     products = {
         product.id: product
         for product in db.scalars(
@@ -387,7 +478,13 @@ def create_order(
 
 
 @app.get("/api/orders/{order_id}")
-def get_order(order_id: str, token: str = "", db: Session = Depends(get_db)) -> dict:
+def get_order(
+    order_id: str,
+    request: Request,
+    token: str = "",
+    db: Session = Depends(get_db),
+) -> dict:
+    rate_limit(request, "order-lookup", limit=60)
     order = db.get(Order, order_id)
     if (
         order is None
@@ -399,7 +496,13 @@ def get_order(order_id: str, token: str = "", db: Session = Depends(get_db)) -> 
 
 
 @app.post("/api/orders/{order_id}/stripe")
-def retry_stripe(order_id: str, token: str = "", db: Session = Depends(get_db)) -> dict:
+def retry_stripe(
+    order_id: str,
+    request: Request,
+    token: str = "",
+    db: Session = Depends(get_db),
+) -> dict:
+    rate_limit(request, "order-retry", limit=10)
     order = db.get(Order, order_id)
     if (
         order is None
@@ -429,7 +532,7 @@ def admin_login(
     db: Session = Depends(get_db),
 ) -> dict:
     _same_origin(request)
-    ip = request.client.host if request.client else "unknown"
+    ip = client_ip(request)
     if not login_allowed(ip):
         raise HTTPException(
             status_code=429,
@@ -710,3 +813,14 @@ def static_page(page: str) -> FileResponse:
     if page not in PAGES:
         raise HTTPException(status_code=404, detail="Stran ni najdena.")
     return FileResponse(BASE_DIR / f"{page}.html")
+
+
+@app.exception_handler(404)
+async def not_found(request: Request, exc: HTTPException):
+    """Show the branded 404 page to browsers, JSON to API clients."""
+    path = request.url.path
+    accepts_html = "text/html" in request.headers.get("accept", "")
+    if path.startswith(("/api/", "/assets/")) or not accepts_html:
+        detail = getattr(exc, "detail", None) or "Stran ni najdena."
+        return JSONResponse({"detail": detail}, status_code=404)
+    return FileResponse(BASE_DIR / "404.html", status_code=404)

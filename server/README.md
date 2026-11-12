@@ -45,6 +45,9 @@ Useful URLs:
 | `/api/bootstrap` | Catalog, settings and admin session |
 | `/docs` | OpenAPI documentation |
 | `/admin.html` | Admin panel (login required) |
+| `/robots.txt` | Crawler rules (blocks admin, cart, checkout, order) |
+| `/sitemap.xml` | Generated sitemap from the database and `PUBLIC_BASE_URL` |
+| `/404.html` | Branded 404 page for unknown paths |
 
 ## 2. Seed data
 
@@ -66,7 +69,12 @@ rows are not overwritten unless you call `seed_database(db, force=True)`.
   (default 7). Passwords are hashed with scrypt.
 - Product create/update/delete, stock quantities, order list, status changes
   (approve → ship → cancel) and manual “mark as paid” for bank transfers.
-- Login attempts are throttled per IP (8 attempts / 10 minutes).
+- Request throttling per IP (behind a proxy the real IP is read from
+  `X-Forwarded-For`):
+  - admin login: 8 attempts / 10 minutes
+  - order creation: 15 / 10 minutes
+  - order lookup: 60 / 10 minutes
+  - payment retry: 10 / 10 minutes
 
 Change the default password before going live.
 
@@ -131,8 +139,9 @@ For Gmail use an app password, for most providers port 587 with STARTTLS.
 | `DATABASE_URL` | `sqlite:///server/nakupko.db` | `postgresql://...` is normalized to the installed psycopg 3 driver |
 | `ADMIN_EMAIL` | `admin@nakupko.local` | Bootstrap admin |
 | `ADMIN_PASSWORD` | `12345678` | **Change in production** |
-| `PUBLIC_BASE_URL` | `http://127.0.0.1:8000` | Used for Stripe return URLs and secure cookies |
+| `PUBLIC_BASE_URL` | `http://127.0.0.1:8000` | Used for Stripe return URLs, secure cookies, sitemap and robots.txt |
 | `ALLOWED_ORIGINS` | localhost | Comma-separated CORS / origin-check list |
+| `TRUST_PROXY` | `true` when `APP_ENV=production` | Read the client IP from `X-Forwarded-For` (Render and most hosts) |
 | `STRIPE_SECRET_KEY` | empty | Enables card payments |
 | `STRIPE_WEBHOOK_SECRET` | empty | Required for webhook verification |
 | `STRIPE_CURRENCY` | `eur` | ISO currency |
@@ -145,6 +154,10 @@ For Gmail use an app password, for most providers port 587 with STARTTLS.
 | `COD_FEE` | `1.50` | EUR |
 
 ## 7. Deployment (Render)
+
+The full step-by-step runbook — environment variables, Stripe webhook, SMTP,
+acceptance tests, custom domain and troubleshooting — is in
+[`../DEPLOY.md`](../DEPLOY.md).
 
 The repository includes `render.yaml`:
 
@@ -175,14 +188,39 @@ A `Procfile` is included for Heroku-style platforms.
 - [ ] Backups enabled for the database
 - [ ] HTTPS enforced by the host
 
-## 8. Tests
+## 8. Tests and smoke test
 
 ```powershell
 python -m pytest server/tests -q
 ```
 
 The suite uses a temporary SQLite database and covers the catalog, admin login,
-order totals, stock validation, the admin order flow and product CRUD.
+order totals, stock validation, the admin order flow, product CRUD, security
+headers, robots/sitemap, the branded 404 and rate limiting.
+
+After a deploy, test the running store:
+
+```powershell
+# read-only checks (health, catalog, pages, headers, SEO files)
+python server/tools/smoke_test.py https://nakupko.onrender.com
+
+# also verify admin login
+$env:SMOKE_ADMIN_EMAIL = "tvoj@email.si"
+$env:SMOKE_ADMIN_PASSWORD = "..."
+python server/tools/smoke_test.py https://nakupko.onrender.com
+
+# create one real COD order (decrements stock; remove it in the admin panel)
+python server/tools/smoke_test.py https://nakupko.onrender.com --order
+```
+
+### Security headers
+
+Every response carries `X-Content-Type-Options`, `X-Frame-Options`,
+`Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` and a
+`Content-Security-Policy` that allows only same-origin scripts, styles and
+connections. Admin and order responses are sent with `Cache-Control: no-store`,
+and `admin.html` with `X-Robots-Tag: noindex`. HSTS is added automatically when
+`PUBLIC_BASE_URL` starts with `https://`.
 
 ## 9. Database notes
 

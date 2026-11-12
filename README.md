@@ -34,7 +34,16 @@ V živem načinu velja:
 - e-poštna obvestila se pošljejo prek SMTP (brez SMTP se izpišejo v dnevnik),
 - pravne strani (splošni pogoji, zasebnost, podatki o podjetju, odstop od pogodbe)
   se v živi trgovini prikažejo s podatki iz `STORE_*`, ob prvem obisku pa se
-  prikaže obvestilo o nujnih piškotkih.
+  prikaže obvestilo o nujnih piškotkih,
+- vsak odgovor ima varnostne glave (CSP, `X-Frame-Options`, `Referrer-Policy` …),
+  skrbniški odgovori pa `Cache-Control: no-store`,
+- prijava, oddaja naročila in iskanje naročila so omejeni na število zahtevkov
+  na IP, da preprečijo zlorabo,
+- `/robots.txt` in `/sitemap.xml` se ustvarita iz baze in `PUBLIC_BASE_URL`,
+  neobstoječe poti pa prikažejo stran `404.html`.
+
+Celoten potek objave (Render, Stripe, SMTP, sprejemni testi) je v
+[`DEPLOY.md`](DEPLOY.md).
 
 
 ## Kako odpreti
@@ -196,6 +205,9 @@ vidite le na tej napravi.
 nakupko/
 ├─ index.html, category.html, search.html, product.html,
 │  cart.html, checkout.html, wishlist.html, order.html, info.html, admin.html
+├─ 404.html                urejena stran za neobstoječe poti (tudi na Pages)
+├─ robots.txt, sitemap.xml statična različica za demo na GitHub Pages
+├─ config.js               demo način za Pages; strežnik vrne svoj /config.js
 ├─ assets/
 │  ├─ css/style.css        celoten oblikovni sistem in odzivna postavitev
 │  ├─ img/favicon.svg      originalna ikona
@@ -205,6 +217,9 @@ nakupko/
 │     ├─ core.js           stanje, košarica, seznam želja, iskanje, lokalna statistika, Stripe
 │     ├─ pages.js          krmilniki posameznih strani
 │     └─ admin.js          demo prijava, nadzorna plošča, naročila, izdelki in Stripe
+├─ server/                 FastAPI strežnik, baza, Stripe, e-pošta, testi
+├─ DEPLOY.md               objava na Render, Stripe in SMTP korak za korakom
+├─ render.yaml             Render blueprint (web + Postgres)
 └─ README.md
 ```
 
